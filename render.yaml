@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: laneria-mariano-backend
+    env: php
+    buildCommand: composer install --no-dev --optimize-autoloader
+    startCommand: php artisan config:cache && php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=$PORT
