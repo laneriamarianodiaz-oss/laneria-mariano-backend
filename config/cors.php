@@ -17,7 +17,7 @@ return [
         'http://127.0.0.1:8000',
 
         // Producción
-        'https://laneria-mariano-frontend.vercel.app',  // ✅ Dominio Vercel
+        'https://laneria-mariano-frontend.vercel.app',  
     ],
 
     'allowed_origins_patterns' => [],

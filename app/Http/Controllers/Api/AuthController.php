@@ -263,7 +263,7 @@ class AuthController extends BaseController
         $user->save();
 
         // URL del frontend
-        $resetUrl = env('FRONTEND_URL', 'http://localhost:4200') . '/autenticacion/restablecer-contrasena?token=' . $token . '&email=' . urlencode($user->email);
+        $resetUrl = env('FRONTEND_URL', 'https://laneria-mariano-frontend.vercel.app') . '/autenticacion/restablecer-contrasena?token=' . $token . '&email=' . urlencode($user->email);
 
         // Enviar email
         try {
