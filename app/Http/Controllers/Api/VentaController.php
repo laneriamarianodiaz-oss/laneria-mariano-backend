@@ -603,7 +603,7 @@ public function subirComprobante(Request $request, $id)
             'observaciones' => $venta->observaciones,
             
             // ✅ Comprobante de pago
-            'comprobante_pago' => $venta->comprobante_pago ? 'http://localhost:8000/' . $venta->comprobante_pago : null,
+            'comprobante_pago' => $venta->comprobante_pago ? 'https://laneria-mariano-frontend.vercel.app/' . $venta->comprobante_pago : null,
 'codigo_operacion' => $venta->codigo_operacion,
             
             // ✅ Items con imágenes - CONVERSIÓN A ARRAY EXPLÍCITA

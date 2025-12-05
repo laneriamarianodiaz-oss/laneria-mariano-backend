@@ -168,7 +168,7 @@ Importa el archivo `postman_collection.json` en Postman para probar todos los en
 
 ### CORS
 Configurado en `config/cors.php` para permitir peticiones desde:
-- `http://localhost:4200` (Angular)
+- `https://laneria-mariano-frontend.vercel.app` (Angular)
 
 ### Rate Limiting
 - API: 60 peticiones por minuto
