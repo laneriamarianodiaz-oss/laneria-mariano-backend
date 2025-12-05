@@ -1,0 +1,459 @@
+{
+  "info": {
+    "name": "Lanería Mariano Díaz - API",
+    "description": "Colección completa de endpoints del sistema",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Autenticación",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Usuario Test\",\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\",\n  \"password_confirmation\": \"password123\",\n  \"rol\": \"cliente\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.token) {",
+                  "    pm.collectionVariables.set('token', jsonData.data.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@laneriamariano.com\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "me"]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Productos",
+      "item": [
+        {
+          "name": "Listar Productos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/productos",
+              "host": ["{{base_url}}"],
+              "path": ["productos"]
+            }
+          }
+        },
+        {
+          "name": "Ver Producto",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/productos/1",
+              "host": ["{{base_url}}"],
+              "path": ["productos", "1"]
+            }
+          }
+        },
+        {
+          "name": "Crear Producto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre_producto\": \"Lana Perlita Domino Verde\",\n  \"tipo_de_producto\": \"Perlita Domino\",\n  \"color_producto\": \"Verde\",\n  \"precio_producto\": 16.50,\n  \"stock_disponible\": 40,\n  \"stock_minimo\": 10,\n  \"descripcion\": \"Lana suave de alta calidad\",\n  \"proveedor_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/productos",
+              "host": ["{{base_url}}"],
+              "path": ["productos"]
+            }
+          }
+        },
+        {
+          "name": "Actualizar Producto",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"precio_producto\": 17.00,\n  \"stock_disponible\": 35\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/productos/1",
+              "host": ["{{base_url}}"],
+              "path": ["productos", "1"]
+            }
+          }
+        },
+        {
+          "name": "Eliminar Producto",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/productos/1",
+              "host": ["{{base_url}}"],
+              "path": ["productos", "1"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Inventario",
+      "item": [
+        {
+          "name": "Listar Inventario",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/inventario",
+              "host": ["{{base_url}}"],
+              "path": ["inventario"]
+            }
+          }
+        },
+        {
+          "name": "Alertas Stock Bajo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/inventario/alertas/stock-bajo",
+              "host": ["{{base_url}}"],
+              "path": ["inventario", "alertas", "stock-bajo"]
+            }
+          }
+        },
+        {
+          "name": "Actualizar Stock",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cantidad\": 10,\n  \"tipo\": \"entrada\",\n  \"motivo\": \"Reposición de stock\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/inventario/1/actualizar-stock",
+              "host": ["{{base_url}}"],
+              "path": ["inventario", "1", "actualizar-stock"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ventas",
+      "item": [
+        {
+          "name": "Listar Ventas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/ventas",
+              "host": ["{{base_url}}"],
+              "path": ["ventas"]
+            }
+          }
+        },
+        {
+          "name": "Crear Venta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cliente_id\": 1,\n  \"metodo_pago\": \"Efectivo\",\n  \"observaciones\": \"Venta de prueba\",\n  \"detalles\": [\n    {\n      \"producto_id\": 1,\n      \"cantidad\": 2\n    },\n    {\n      \"producto_id\": 2,\n      \"cantidad\": 1\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/ventas",
+              "host": ["{{base_url}}"],
+              "path": ["ventas"]
+            }
+          }
+        },
+        {
+          "name": "Ver Venta",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/ventas/1",
+              "host": ["{{base_url}}"],
+              "path": ["ventas", "1"]
+            }
+          }
+        },
+        {
+          "name": "Estadísticas de Ventas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/ventas/estadisticas/general",
+              "host": ["{{base_url}}"],
+              "path": ["ventas", "estadisticas", "general"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Clientes",
+      "item": [
+        {
+          "name": "Listar Clientes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/clientes",
+              "host": ["{{base_url}}"],
+              "path": ["clientes"]
+            }
+          }
+        },
+        {
+          "name": "Crear Cliente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre_cliente\": \"Pedro Ramírez\",\n  \"telefono\": \"966555444\",\n  \"email\": \"pedro@example.com\",\n  \"direccion\": \"Calle Los Pinos 123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/clientes",
+              "host": ["{{base_url}}"],
+              "path": ["clientes"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reportes",
+      "item": [
+        {
+          "name": "Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reportes/dashboard",
+              "host": ["{{base_url}}"],
+              "path": ["reportes", "dashboard"]
+            }
+          }
+        },
+        {
+          "name": "Productos Más Vendidos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reportes/productos-mas-vendidos",
+              "host": ["{{base_url}}"],
+              "path": ["reportes", "productos-mas-vendidos"]
+            }
+          }
+        },
+        {
+          "name": "Reporte de Inventario",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reportes/inventario",
+              "host": ["{{base_url}}"],
+              "path": ["reportes", "inventario"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
