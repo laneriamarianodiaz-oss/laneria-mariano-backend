@@ -48,7 +48,7 @@ class Cliente extends Model
     }
 
     /**
-     * ✅ Accessor para correo (alias de email)
+     * Accessor para correo (alias de email)
      */
     public function getCorreoAttribute()
     {

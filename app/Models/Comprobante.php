@@ -11,6 +11,7 @@ class Comprobante extends Model
 
     protected $table = 'comprobantes';
     protected $primaryKey = 'comprobante_id';
+    public $timestamps = true;
 
     protected $fillable = [
         'venta_id',

@@ -11,6 +11,7 @@ class DetalleCarrito extends Model
 
     protected $table = 'detalle_carritos';
     protected $primaryKey = 'detalle_carrito_id';
+    public $timestamps = true;
 
     protected $fillable = [
         'carrito_id',

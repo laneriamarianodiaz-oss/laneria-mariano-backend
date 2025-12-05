@@ -11,6 +11,7 @@ class Inventario extends Model
 
     protected $table = 'inventarios';
     protected $primaryKey = 'inventario_id';
+    public $timestamps = true;
 
     protected $fillable = [
         'producto_id',
@@ -38,7 +39,7 @@ class Inventario extends Model
      */
     public function scopeStockBajo($query)
     {
-        return $query->whereRaw('stock_actual <= stock_minimo');
+        return $query->whereColumn('stock_actual', '<=', 'stock_minimo');
     }
 
     /**

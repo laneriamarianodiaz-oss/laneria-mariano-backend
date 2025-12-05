@@ -17,12 +17,12 @@ class Producto extends Model
         'codigo_producto',
         'nombre_producto',
         'tipo_de_producto',
-        'categoria',           // ⭐ AGREGADO
+        'categoria',
         'color_producto',
         'talla_producto',
         'precio_producto',
         'stock_disponible',
-        'stock_minimo',        // ⭐ AGREGADO
+        'stock_minimo',
         'descripcion',
         'imagen_url',
         'proveedor_id',

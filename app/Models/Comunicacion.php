@@ -11,6 +11,7 @@ class Comunicacion extends Model
 
     protected $table = 'comunicaciones';
     protected $primaryKey = 'comunicacion_id';
+    public $timestamps = true;
 
     protected $fillable = [
         'cliente_id',

@@ -11,6 +11,7 @@ class PedidoPersonalizado extends Model
 
     protected $table = 'pedidos_personalizados';
     protected $primaryKey = 'pedido_personalizado_id';
+    public $timestamps = true;
 
     protected $fillable = [
         'cliente_id',

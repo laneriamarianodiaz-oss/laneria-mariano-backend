@@ -11,6 +11,7 @@ class Venta extends Model
 
     protected $table = 'ventas';
     protected $primaryKey = 'venta_id';
+    public $timestamps = true;
 
     protected $fillable = [
         'cliente_id',
@@ -89,10 +90,10 @@ class Venta extends Model
     /**
      * Relación: Una venta tiene muchos detalles
      */
-public function detalles()
-{
-    return $this->hasMany(DetalleVenta::class, 'venta_id', 'venta_id');
-}
+    public function detalles()
+    {
+        return $this->hasMany(DetalleVenta::class, 'venta_id', 'venta_id');
+    }
 
     /**
      * Relación: Una venta tiene un comprobante
@@ -107,7 +108,7 @@ public function detalles()
      */
     public function scopeCompletadas($query)
     {
-        return $query->where('estado_venta', 'Completado');
+        return $query->where('estado_venta', 'Completada');
     }
 
     /**
@@ -131,7 +132,7 @@ public function detalles()
      */
     public function scopeCanceladas($query)
     {
-        return $query->where('estado_venta', 'Cancelado');
+        return $query->where('estado_venta', 'Cancelada');
     }
 
     /**
