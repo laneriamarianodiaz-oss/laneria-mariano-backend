@@ -12,16 +12,14 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
         apiPrefix: 'api',
     )
-    ->withMiddleware(function (Middleware $middleware) {
+->withMiddleware(function (Middleware $middleware) {
+        // Agregar CORS personalizado al inicio de todo
+        $middleware->prepend(\App\Http\Middleware\Cors::class);
+        
         // Registrar middleware de roles
         $middleware->alias([
             'role' => \App\Http\Middleware\CheckRole::class,
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
-        ]);
-        
-        // IMPORTANTE: Habilitar CORS para API
-        $middleware->api(prepend: [
-            \Illuminate\Http\Middleware\HandleCors::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
