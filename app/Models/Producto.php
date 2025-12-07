@@ -11,29 +11,35 @@ class Producto extends Model
 
     protected $table = 'productos';
     protected $primaryKey = 'producto_id';
-    public $timestamps = true;
+    public $timestamps = true; // usa created_at y updated_at
 
+    // ✅ TODOS LOS CAMPOS QUE SE PUEDEN LLENAR
     protected $fillable = [
-        'codigo_producto',
+        'codigo_producto',      // ✅ AGREGADO
         'nombre_producto',
         'tipo_de_producto',
-        'categoria',
+        'categoria',            // ✅ AGREGADO
         'color_producto',
         'talla_producto',
         'precio_producto',
         'stock_disponible',
-        'stock_minimo',
+        'stock_minimo',         // ✅ AGREGADO
         'descripcion',
         'imagen_url',
         'proveedor_id',
         'estado_producto',
+        'fecha_creacion'
     ];
 
+    // ✅ CONVERSIÓN DE TIPOS
     protected $casts = [
         'precio_producto' => 'decimal:2',
         'stock_disponible' => 'integer',
         'stock_minimo' => 'integer',
+        'proveedor_id' => 'integer',
         'fecha_creacion' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
     /**
