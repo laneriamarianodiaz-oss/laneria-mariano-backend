@@ -216,98 +216,60 @@ class ProductoController extends BaseController
      * Crear nuevo producto
      */
     public function store(Request $request)
-    {
-        \Log::info('📦 Datos recibidos para crear producto:', $request->all());
-
-        $validator = Validator::make($request->all(), [
-            'codigo_producto' => 'required|string|max:50|unique:productos,codigo_producto',
-            'nombre_producto' => 'required|string|max:100',
-            'tipo_de_producto' => 'required|string|max:50',
-            'precio_producto' => 'required|numeric|min:0',
-            'stock_disponible' => 'required|integer|min:0',
-            'stock_minimo' => 'required|integer|min:0',
-            'estado_producto' => 'in:Activo,Inactivo',
-            'imagen' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120'
+{
+    try {
+        $validated = $request->validate([
+            'codigo_lana' => 'required|string|unique:productos',
+            'nombre' => 'required|string|max:255',
+            'tipo_lana' => 'required|string',
+            'precio' => 'required|numeric|min:0',
+            'stock' => 'required|integer|min:0',
+            'color' => 'nullable|string',
+            'talla' => 'nullable|string',
+            'descripcion' => 'nullable|string',
+            'proveedor' => 'nullable|string',
+            'stock_minimo' => 'nullable|integer|min:0',
+            'imagen' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
-        if ($validator->fails()) {
-            \Log::error('❌ Validación fallida:', $validator->errors()->toArray());
-            return response()->json([
-                'success' => false,
-                'errors' => $validator->errors()
-            ], 422);
+        // SOLO subir imagen SI existe
+        $imagenUrl = null;
+        if ($request->hasFile('imagen')) {
+            $imagenUrl = $this->subirImagen($request->file('imagen'));
         }
 
-        DB::beginTransaction();
-        try {
-            $imagenUrl = null;
+        $producto = Producto::create([
+            'codigo_lana' => $validated['codigo_lana'],
+            'nombre' => $validated['nombre'],
+            'tipo_lana' => $validated['tipo_lana'],
+            'precio' => $validated['precio'],
+            'stock' => $validated['stock'],
+            'color' => $validated['color'] ?? null,
+            'talla' => $validated['talla'] ?? null,
+            'descripcion' => $validated['descripcion'] ?? null,
+            'proveedor' => $validated['proveedor'] ?? null,
+            'stock_minimo' => $validated['stock_minimo'] ?? 0,
+            'imagen_url' => $imagenUrl,
+        ]);
 
-            // Si viene imagen, subir a Cloudinary
-            if ($request->hasFile('imagen')) {
-                $imagen = $request->file('imagen');
-                
-                \Log::info('📸 Subiendo imagen a Cloudinary...');
-                
-                $uploadedFile = Cloudinary::upload(
-                    $imagen->getRealPath(),
-                    [
-                        'folder' => 'laneria-mariano/productos',
-                        'transformation' => [
-                            'width' => 800,
-                            'height' => 800,
-                            'crop' => 'limit',
-                            'quality' => 'auto'
-                        ]
-                    ]
-                );
+        return response()->json([
+            'success' => true,
+            'data' => $producto
+        ], 201);
 
-                $imagenUrl = $uploadedFile->getSecurePath();
-                \Log::info('✅ Imagen subida:', ['url' => $imagenUrl]);
-            }
-
-            $producto = Producto::create([
-                'codigo_producto' => $request->codigo_producto,
-                'nombre_producto' => $request->nombre_producto,
-                'tipo_de_producto' => $request->tipo_de_producto,
-                'categoria' => $request->categoria,
-                'color_producto' => $request->color_producto,
-                'talla_producto' => $request->talla_producto,
-                'precio_producto' => $request->precio_producto,
-                'stock_disponible' => $request->stock_disponible,
-                'stock_minimo' => $request->stock_minimo,
-                'descripcion' => $request->descripcion,
-                'imagen_url' => $imagenUrl,
-                'proveedor_id' => $request->proveedor_id,
-                'estado_producto' => $request->estado_producto ?? 'Activo',
-                'fecha_creacion' => now()
-            ]);
-
-            DB::commit();
-
-            \Log::info('✅ Producto creado exitosamente:', [
-                'id' => $producto->producto_id,
-                'codigo' => $producto->codigo_producto,
-                'imagen' => $imagenUrl
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Producto creado exitosamente',
-                'data' => $this->mapearProducto($producto)
-            ], 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            \Log::error('❌ Error al crear producto: ' . $e->getMessage());
-            \Log::error('Stack: ' . $e->getTraceAsString());
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al crear el producto',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error de validación',
+            'errors' => $e->errors()
+        ], 422);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al crear producto: ' . $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * Actualizar producto
