@@ -11,7 +11,9 @@ class Venta extends Model
 
     protected $table = 'ventas';
     protected $primaryKey = 'venta_id';
-    public $timestamps = true;
+    
+    // ✅ DESACTIVAR TIMESTAMPS si la tabla NO tiene created_at y updated_at
+    public $timestamps = false; // ← AGREGADO
 
     protected $fillable = [
         'cliente_id',
@@ -108,7 +110,7 @@ class Venta extends Model
      */
     public function scopeCompletadas($query)
     {
-        return $query->where('estado_venta', 'Completada');
+        return $query->where('estado_venta', 'Completado');
     }
 
     /**
@@ -132,7 +134,7 @@ class Venta extends Model
      */
     public function scopeCanceladas($query)
     {
-        return $query->where('estado_venta', 'Cancelada');
+        return $query->where('estado_venta', 'Cancelado');
     }
 
     /**
