@@ -221,7 +221,7 @@ class ProductoController extends BaseController
     try {
         // Validación con nombres correctos de la BD
         $validatedData = $request->validate([
-            'codigo_producto' => 'nullable|string|max:50',  // Opcional, aunque no está en la tabla
+            'codigo_producto' => 'required|string|max:50|unique:productos,codigo_producto', // ✅ Ahora requerido y único
             'nombre_producto' => 'required|string|max:100',
             'tipo_de_producto' => 'required|string|max:50',
             'categoria' => 'nullable|string|max:50',
@@ -244,6 +244,7 @@ class ProductoController extends BaseController
 
         // Crear producto con nombres correctos
         $producto = Producto::create([
+            'codigo_producto' => $validatedData['codigo_producto'], // ✅ Agregado
             'nombre_producto' => $validatedData['nombre_producto'],
             'tipo_de_producto' => $validatedData['tipo_de_producto'],
             'categoria' => $validatedData['categoria'] ?? null,
