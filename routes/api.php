@@ -41,6 +41,15 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::get('/mi-perfil', [AuthController::class, 'miPerfil']);
     });
 
+    // ✅ PRODUCTOS ADMIN - FUERA DEL MIDDLEWARE DE ROL (TEMPORAL)
+    Route::prefix('productos')->group(function () {
+        Route::get('/admin', [ProductoController::class, 'indexAdmin']); // ← MOVIDA AQUÍ
+        Route::post('/', [ProductoController::class, 'store']);
+        Route::post('/subir-imagen', [ProductoController::class, 'subirImagen']);
+        Route::put('/{id}', [ProductoController::class, 'update']);
+        Route::delete('/{id}', [ProductoController::class, 'destroy']);
+    });
+
     // Carrito
     Route::prefix('carrito')->group(function () {
         Route::get('/', [CarritoController::class, 'miCarrito']);
@@ -56,20 +65,11 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     });
 
     // =========================================
-    // 👑 RUTAS DE ADMINISTRADOR
+    // 👑 RUTAS DE ADMINISTRADOR (CON MIDDLEWARE DE ROL)
     // =========================================
     
     Route::middleware('role:administrador,vendedor')->group(function () {
         
-        // Productos (admin)
-        Route::prefix('productos')->group(function () {
-            Route::get('/admin', [ProductoController::class, 'indexAdmin']);
-            Route::post('/', [ProductoController::class, 'store']);
-            Route::post('/subir-imagen', [ProductoController::class, 'subirImagen']);
-            Route::put('/{id}', [ProductoController::class, 'update']);
-            Route::delete('/{id}', [ProductoController::class, 'destroy']);
-        });
-
         // Ventas (admin)
         Route::prefix('ventas')->group(function () {
             Route::get('/', [VentaController::class, 'index']);
