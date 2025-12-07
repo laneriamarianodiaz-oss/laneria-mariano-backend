@@ -43,7 +43,14 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     Route::get('/auth/mi-perfil', [AuthController::class, 'miPerfil']);
     
     // ===================================
-    // 🛒 CARRITO DE COMPRAS (COMPLETO)
+    // 📦 PEDIDOS (CLIENTES)
+    // ===================================
+    Route::get('/mis-pedidos', [VentaController::class, 'misPedidos']);
+    Route::get('/pedidos/{id}', [VentaController::class, 'show']);
+    Route::post('/pedidos/{id}/cancelar', [VentaController::class, 'cancelar']);
+    
+    // ===================================
+    // 🛒 CARRITO DE COMPRAS
     // ===================================
     Route::get('/carrito', [CarritoController::class, 'miCarrito']);
     Route::post('/carrito/agregar', [CarritoController::class, 'agregarProducto']);
@@ -77,7 +84,7 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     });
     
     // ===================================
-    // 📊 INVENTARIO (Admin y Vendedor) ✅ AGREGADO
+    // 📊 INVENTARIO (Admin y Vendedor)
     // ===================================
     Route::middleware(['role:administrador,vendedor'])->group(function () {
         Route::get('/inventario', [InventarioController::class, 'index']);
