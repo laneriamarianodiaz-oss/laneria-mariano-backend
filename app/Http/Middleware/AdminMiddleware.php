@@ -10,7 +10,7 @@ class AdminMiddleware
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (!auth()->check() || auth()->user()->rol !== 'admin') {
+        if (!auth()->check() || auth()->user()->rol !== 'administrador') {
             return response()->json([
                 'success' => false,
                 'message' => 'No autorizado. Solo administradores.'

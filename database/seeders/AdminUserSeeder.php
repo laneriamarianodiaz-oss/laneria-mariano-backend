@@ -14,7 +14,7 @@ class AdminUserSeeder extends Seeder
             'name' => 'Administradora',
             'email' => 'admin@laneria.com',
             'password' => Hash::make('admin123'),
-            'rol' => 'admin',
+            'rol' => 'administrador',
         ]);
     }
 }

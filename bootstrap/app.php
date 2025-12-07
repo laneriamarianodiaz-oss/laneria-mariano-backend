@@ -19,7 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Registrar middleware de roles
         $middleware->alias([
             'role' => \App\Http\Middleware\CheckRole::class,
-            'admin' => \App\Http\Middleware\AdminMiddleware::class,
+            'administrador' => \App\Http\Middleware\AdminMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

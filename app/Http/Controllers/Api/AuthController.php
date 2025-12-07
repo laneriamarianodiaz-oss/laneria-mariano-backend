@@ -107,19 +107,19 @@ class AuthController extends BaseController
             }
 
             return response()->json([
-    'success' => true,
-    'message' => 'Usuario registrado exitosamente. Código: ' . $verificationCode,
-    'data' => [
-        'user' => [
-            'id' => $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-            'rol' => $user->rol,
-            'email_verified' => false
-        ],
-        'codigo_verificacion' => $verificationCode  // ← SOLO PARA DESARROLLO
-    ]
-], 201);
+                'success' => true,
+                'message' => 'Usuario registrado exitosamente. Código: ' . $verificationCode,
+                'data' => [
+                    'user' => [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'rol' => $user->rol,
+                        'email_verified' => false
+                    ],
+                    'codigo_verificacion' => $verificationCode  // ← SOLO PARA DESARROLLO
+                ]
+            ], 201);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
@@ -252,7 +252,7 @@ class AuthController extends BaseController
     }
 
     /**
-     * 🔐 LOGIN (CON VERIFICACIÓN DE EMAIL)
+     * 🔐 LOGIN (VERIFICACIÓN DE EMAIL DESACTIVADA TEMPORALMENTE)
      */
     public function login(Request $request)
     {
@@ -271,15 +271,15 @@ class AuthController extends BaseController
             return $this->errorResponse('Credenciales incorrectas', 401);
         }
 
-        // ✅ VERIFICAR QUE EL EMAIL ESTÉ VERIFICADO
-        if (!$user->hasVerifiedEmail()) {
+        // ✅ VERIFICACIÓN DE EMAIL DESACTIVADA TEMPORALMENTE
+        /*if (!$user->hasVerifiedEmail()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Debes verificar tu email antes de iniciar sesión',
                 'requires_verification' => true,
                 'email' => $user->email
             ], 403);
-        }
+        }*/
 
         // Eliminar tokens anteriores
         $user->tokens()->delete();
