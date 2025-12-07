@@ -17,89 +17,96 @@ class AuthController extends BaseController
     /**
      * 📝 REGISTRO DE USUARIO (CON VERIFICACIÓN DE EMAIL)
      */
-   public function register(Request $request)
-{
-    try {
-        // Validar datos
-        $validatedData = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:6',
-            'password_confirmation' => 'required|same:password',
-            'telefono' => 'required|string|max:15',
-        ]);
+    public function register(Request $request)
+    {
+        try {
+            // Validar datos
+            $validatedData = $request->validate([
+                'name' => 'required|string|max:255',
+                'email' => 'required|string|email|max:255|unique:users',
+                'password' => 'required|string|min:6',
+                'password_confirmation' => 'required|same:password',
+                'telefono' => 'required|string|max:15',
+            ]);
 
-        // Verificar si el email ya existe
-        $existingUser = User::where('email', $request->email)->first();
-        if ($existingUser) {
+            // Verificar si el email ya existe
+            $existingUser = User::where('email', $request->email)->first();
+            if ($existingUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El email ya está registrado'
+                ], 409);
+            }
+
+            // Generar código de verificación
+            $verificationCode = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+            // Crear usuario
+            $user = User::create([
+                'name' => $validatedData['name'],
+                'email' => $validatedData['email'],
+                'password' => Hash::make($validatedData['password']),
+                'rol' => 'cliente',
+                'verification_code' => $verificationCode,
+                'verification_code_expires_at' => now()->addMinutes(15),
+                'email_verified' => false
+            ]);
+
+            // Crear cliente asociado
+            Cliente::create([
+                'user_id' => $user->id,
+                'nombre_cliente' => $validatedData['name'],
+                'telefono' => $validatedData['telefono'],
+                'email' => $validatedData['email'],
+                'fecha_registro' => now()
+            ]);
+
+            // Enviar email con código
+            try {
+                \Log::info('🔵 Intentando enviar email a: ' . $user->email);
+                \Log::info('🔵 MAIL_MAILER: ' . config('mail.default'));
+                \Log::info('🔵 BREVO_API_KEY existe: ' . (config('brevo.api_key') ? 'SÍ' : 'NO'));
+                
+                Mail::to($user->email)->send(new VerificationCodeMail($user, $verificationCode));
+                
+                \Log::info('✅ Email enviado exitosamente');
+            } catch (\Exception $e) {
+                \Log::error('❌ Error al enviar email: ' . $e->getMessage());
+                \Log::error('❌ Stack trace: ' . $e->getTraceAsString());
+                // Continuar aunque falle el email
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Usuario registrado exitosamente. Revisa tu correo para verificar tu cuenta.',
+                'data' => [
+                    'user' => [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'rol' => $user->rol,
+                        'email_verified' => false
+                    ]
+                ]
+            ], 201);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'El email ya está registrado'
-            ], 409);
-        }
+                'message' => 'Error de validación',
+                'errors' => $e->errors()
+            ], 422);
 
-        // Generar código de verificación
-        $verificationCode = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-
-        // Crear usuario
-        $user = User::create([
-            'name' => $validatedData['name'],
-            'email' => $validatedData['email'],
-            'password' => Hash::make($validatedData['password']),
-            'rol' => 'cliente',
-            'verification_code' => $verificationCode,
-            'verification_code_expires_at' => now()->addMinutes(15),
-            'email_verified' => false
-        ]);
-
-        // Crear cliente asociado
-        Cliente::create([
-            'user_id' => $user->id,
-            'nombre_cliente' => $validatedData['name'],
-            'telefono' => $validatedData['telefono'],
-            'email' => $validatedData['email'],
-            'fecha_registro' => now()
-        ]);
-
-        // Enviar email con código
-        try {
-            Mail::to($user->email)->send(new VerificationCodeMail($user, $verificationCode));
         } catch (\Exception $e) {
-            \Log::error('Error al enviar email de verificación: ' . $e->getMessage());
-            // Continuar aunque falle el email
+            \Log::error('Error en registro: ' . $e->getMessage());
+            \Log::error('Stack trace: ' . $e->getTraceAsString());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al registrar usuario: ' . $e->getMessage()
+            ], 500);
         }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Usuario registrado exitosamente. Revisa tu correo para verificar tu cuenta.',
-            'data' => [
-                'user' => [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'rol' => $user->rol,
-                    'email_verified' => false
-                ]
-            ]
-        ], 201);
-
-    } catch (\Illuminate\Validation\ValidationException $e) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Error de validación',
-            'errors' => $e->errors()
-        ], 422);
-
-    } catch (\Exception $e) {
-        \Log::error('Error en registro: ' . $e->getMessage());
-        \Log::error('Stack trace: ' . $e->getTraceAsString());
-        
-        return response()->json([
-            'success' => false,
-            'message' => 'Error al registrar usuario: ' . $e->getMessage()
-        ], 500);
     }
-}
 
     /**
      * ✅ VERIFICAR CÓDIGO DE EMAIL
@@ -182,7 +189,7 @@ class AuthController extends BaseController
         $user->save();
 
         // Enviar email
-        Mail::to($user->email)->send(new VerificationCodeMail($verificationCode, $user->name));
+        Mail::to($user->email)->send(new VerificationCodeMail($user, $verificationCode));
 
         return $this->successResponse(null, '📧 Código de verificación reenviado');
     }
@@ -239,64 +246,58 @@ class AuthController extends BaseController
      * 📧 SOLICITAR RECUPERACIÓN DE CONTRASEÑA
      */
     public function forgotPassword(Request $request)
-{
-    try {
-        $request->validate([
-            'email' => 'required|email'
-        ]);
-
-        $user = User::where('email', $request->email)->first();
-
-        if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No existe un usuario con ese email'
-            ], 200); // ← CAMBIAR DE 404 A 200
-        }
-
-        // Generar token único
-        $token = Str::random(64);
-
-        // Guardar token y fecha de expiración
-        $user->password_reset_token = Hash::make($token);
-        $user->password_reset_expires_at = now()->addHour();
-        $user->save();
-
-        // URL del frontend
-        $resetUrl = env('FRONTEND_URL', 'https://laneria-mariano-frontend.vercel.app') . '/autenticacion/restablecer-contrasena?token=' . $token . '&email=' . urlencode($user->email);
-
-        // Enviar email
+    {
         try {
-    \Log::info('🔵 Intentando enviar email a: ' . $user->email);
-    \Log::info('🔵 MAIL_MAILER: ' . config('mail.default'));
-    \Log::info('🔵 BREVO_API_KEY existe: ' . (config('brevo.api_key') ? 'SÍ' : 'NO'));
-    
-    Mail::to($user->email)->send(new VerificationCodeMail($user, $verificationCode));
-    
-    \Log::info('✅ Email enviado exitosamente');
-} catch (\Exception $e) {
-    \Log::error('❌ Error al enviar email: ' . $e->getMessage());
-    \Log::error('❌ Stack trace: ' . $e->getTraceAsString());
+            $request->validate([
+                'email' => 'required|email'
+            ]);
+
+            $user = User::where('email', $request->email)->first();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No existe un usuario con ese email'
+                ], 200);
+            }
+
+            // Generar token único
+            $token = Str::random(64);
+
+            // Guardar token y fecha de expiración
+            $user->password_reset_token = Hash::make($token);
+            $user->password_reset_expires_at = now()->addHour();
+            $user->save();
+
+            // URL del frontend
+            $resetUrl = env('FRONTEND_URL', 'https://laneria-mariano-frontend.vercel.app') . '/autenticacion/restablecer-contrasena?token=' . $token . '&email=' . urlencode($user->email);
+
+            // Enviar email
+            try {
+                Mail::to($user->email)->send(new PasswordResetMail($user, $resetUrl));
+            } catch (\Exception $e) {
+                \Log::error('Error al enviar email de recuperación: ' . $e->getMessage());
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al enviar el correo. Intenta de nuevo.'
+                ], 500);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Se ha enviado un enlace de recuperación a tu correo'
+            ], 200);
+
+        } catch (\Exception $e) {
+            \Log::error('Error en forgot password: ' . $e->getMessage());
+            
             return response()->json([
                 'success' => false,
-                'message' => 'Error al enviar el correo. Intenta de nuevo.'
+                'message' => 'Error al procesar solicitud: ' . $e->getMessage()
             ], 500);
         }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Se ha enviado un enlace de recuperación a tu correo'
-        ], 200);
-
-    } catch (\Exception $e) {
-        \Log::error('Error en forgot password: ' . $e->getMessage());
-        
-        return response()->json([
-            'success' => false,
-            'message' => 'Error al procesar solicitud: ' . $e->getMessage()
-        ], 500);
     }
-}
 
     /**
      * 🔑 RESTABLECER CONTRASEÑA
