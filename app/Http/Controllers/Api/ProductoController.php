@@ -7,7 +7,7 @@ use App\Models\Inventario;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
+use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
 class ProductoController extends BaseController
 {
@@ -17,7 +17,6 @@ class ProductoController extends BaseController
     public function indexAdmin(Request $request)
     {
         try {
-            // ⚡ NO filtrar por estado - mostrar todos
             $query = Producto::query();
             
             // Búsqueda
@@ -134,7 +133,7 @@ class ProductoController extends BaseController
     }
 
     /**
-     * 📸 Subir imagen de producto
+     * 📸 Subir imagen a Cloudinary
      */
     public function subirImagen(Request $request)
     {
@@ -152,21 +151,34 @@ class ProductoController extends BaseController
 
             if ($request->hasFile('imagen')) {
                 $imagen = $request->file('imagen');
-                $nombreArchivo = time() . '_' . str_replace(' ', '_', strtolower($imagen->getClientOriginalName()));
                 
-                // Guardar en public/productos
-                $ruta = $imagen->move(public_path('productos'), $nombreArchivo);
-                
-                // URL completa
-                $url = url('productos/' . $nombreArchivo);
+                // ✅ SUBIR A CLOUDINARY
+                $uploadedFile = Cloudinary::upload(
+                    $imagen->getRealPath(),
+                    [
+                        'folder' => 'laneria-mariano/productos',
+                        'transformation' => [
+                            'width' => 800,
+                            'height' => 800,
+                            'crop' => 'limit',
+                            'quality' => 'auto'
+                        ]
+                    ]
+                );
 
-                \Log::info('✅ Imagen subida:', ['url' => $url]);
+                $url = $uploadedFile->getSecurePath();
+                $publicId = $uploadedFile->getPublicId();
+
+                \Log::info('✅ Imagen subida a Cloudinary:', [
+                    'url' => $url,
+                    'public_id' => $publicId
+                ]);
 
                 return response()->json([
                     'success' => true,
                     'data' => [
                         'imagen_url' => $url,
-                        'nombre_archivo' => $nombreArchivo
+                        'public_id' => $publicId
                     ]
                 ]);
             }
@@ -178,10 +190,10 @@ class ProductoController extends BaseController
 
         } catch (\Exception $e) {
             \Log::error('❌ Error al subir imagen: ' . $e->getMessage());
+            \Log::error('Stack: ' . $e->getTraceAsString());
             return response()->json([
                 'success' => false,
-                'message' => 'Error al subir imagen',
-                'error' => $e->getMessage()
+                'message' => 'Error al subir imagen: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -205,6 +217,8 @@ class ProductoController extends BaseController
      */
     public function store(Request $request)
     {
+        \Log::info('📦 Datos recibidos para crear producto:', $request->all());
+
         $validator = Validator::make($request->all(), [
             'codigo_producto' => 'required|string|max:50|unique:productos,codigo_producto',
             'nombre_producto' => 'required|string|max:100',
@@ -217,21 +231,38 @@ class ProductoController extends BaseController
         ]);
 
         if ($validator->fails()) {
+            \Log::error('❌ Validación fallida:', $validator->errors()->toArray());
             return response()->json([
                 'success' => false,
                 'errors' => $validator->errors()
             ], 422);
         }
 
+        DB::beginTransaction();
         try {
             $imagenUrl = null;
 
-            // Procesar imagen si viene en el request
+            // Si viene imagen, subir a Cloudinary
             if ($request->hasFile('imagen')) {
                 $imagen = $request->file('imagen');
-                $nombreArchivo = time() . '_' . str_replace(' ', '_', strtolower($imagen->getClientOriginalName()));
-                $imagen->move(public_path('productos'), $nombreArchivo);
-                $imagenUrl = url('productos/' . $nombreArchivo);
+                
+                \Log::info('📸 Subiendo imagen a Cloudinary...');
+                
+                $uploadedFile = Cloudinary::upload(
+                    $imagen->getRealPath(),
+                    [
+                        'folder' => 'laneria-mariano/productos',
+                        'transformation' => [
+                            'width' => 800,
+                            'height' => 800,
+                            'crop' => 'limit',
+                            'quality' => 'auto'
+                        ]
+                    ]
+                );
+
+                $imagenUrl = $uploadedFile->getSecurePath();
+                \Log::info('✅ Imagen subida:', ['url' => $imagenUrl]);
             }
 
             $producto = Producto::create([
@@ -248,9 +279,12 @@ class ProductoController extends BaseController
                 'imagen_url' => $imagenUrl,
                 'proveedor_id' => $request->proveedor_id,
                 'estado_producto' => $request->estado_producto ?? 'Activo',
+                'fecha_creacion' => now()
             ]);
 
-            \Log::info('✅ Producto creado:', [
+            DB::commit();
+
+            \Log::info('✅ Producto creado exitosamente:', [
                 'id' => $producto->producto_id,
                 'codigo' => $producto->codigo_producto,
                 'imagen' => $imagenUrl
@@ -259,11 +293,14 @@ class ProductoController extends BaseController
             return response()->json([
                 'success' => true,
                 'message' => 'Producto creado exitosamente',
-                'data' => $this->mapearProducto($producto->load('inventario', 'proveedor'))
+                'data' => $this->mapearProducto($producto)
             ], 201);
 
         } catch (\Exception $e) {
+            DB::rollBack();
             \Log::error('❌ Error al crear producto: ' . $e->getMessage());
+            \Log::error('Stack: ' . $e->getTraceAsString());
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Error al crear el producto',
@@ -293,7 +330,7 @@ class ProductoController extends BaseController
             'stock_disponible' => 'integer|min:0',
             'stock_minimo' => 'integer|min:0',
             'descripcion' => 'nullable|string',
-            'imagen_url' => 'nullable|string|max:255',
+            'imagen_url' => 'nullable|string',
             'proveedor_id' => 'nullable|exists:proveedores,proveedor_id',
             'estado_producto' => 'in:Activo,Inactivo',
             'imagen' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120'
@@ -305,12 +342,24 @@ class ProductoController extends BaseController
 
         DB::beginTransaction();
         try {
-            // Si viene nueva imagen
+            // Si viene nueva imagen, subir a Cloudinary
             if ($request->hasFile('imagen')) {
                 $imagen = $request->file('imagen');
-                $nombreArchivo = time() . '_' . str_replace(' ', '_', strtolower($imagen->getClientOriginalName()));
-                $imagen->move(public_path('productos'), $nombreArchivo);
-                $request->merge(['imagen_url' => url('productos/' . $nombreArchivo)]);
+                
+                $uploadedFile = Cloudinary::upload(
+                    $imagen->getRealPath(),
+                    [
+                        'folder' => 'laneria-mariano/productos',
+                        'transformation' => [
+                            'width' => 800,
+                            'height' => 800,
+                            'crop' => 'limit',
+                            'quality' => 'auto'
+                        ]
+                    ]
+                );
+
+                $request->merge(['imagen_url' => $uploadedFile->getSecurePath()]);
             }
 
             $producto->update($request->only([

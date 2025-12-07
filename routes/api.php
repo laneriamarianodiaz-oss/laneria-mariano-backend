@@ -20,9 +20,12 @@ Route::prefix('v1')->group(function () {
         Route::post('/login', [AuthController::class, 'login']);
     });
 
-    // Productos (público)
+    // Productos (público - solo activos)
     Route::get('/productos', [ProductoController::class, 'index']);
     Route::get('/productos/{id}', [ProductoController::class, 'show']);
+    Route::get('/productos/tipo/{tipo}', [ProductoController::class, 'porTipo']);
+    Route::get('/productos-tipos', [ProductoController::class, 'tipos']);
+    Route::get('/productos-colores', [ProductoController::class, 'colores']);
 });
 
 // =========================================
@@ -60,7 +63,9 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         
         // Productos (admin)
         Route::prefix('productos')->group(function () {
+            Route::get('/admin', [ProductoController::class, 'indexAdmin']);
             Route::post('/', [ProductoController::class, 'store']);
+            Route::post('/subir-imagen', [ProductoController::class, 'subirImagen']);
             Route::put('/{id}', [ProductoController::class, 'update']);
             Route::delete('/{id}', [ProductoController::class, 'destroy']);
         });
