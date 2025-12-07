@@ -6,9 +6,15 @@ use Symfony\Component\Mailer\SentMessage;
 use Symfony\Component\Mailer\Transport\AbstractTransport;
 use Symfony\Component\Mime\MessageConverter;
 use Illuminate\Support\Facades\Http;
+use Psr\Log\LoggerInterface;
 
 class BrevoTransport extends AbstractTransport
 {
+    public function __construct(LoggerInterface $logger = null)
+    {
+        parent::__construct($logger);
+    }
+
     protected function doSend(SentMessage $message): void
     {
         $email = MessageConverter::toEmail($message->getOriginalMessage());
@@ -25,13 +31,18 @@ class BrevoTransport extends AbstractTransport
                 ];
             }, $email->getTo()),
             'subject' => $email->getSubject(),
-            'htmlContent' => $email->getHtmlBody(),
+            'htmlContent' => $email->getHtmlBody() ?: $email->getTextBody(),
         ];
 
-        Http::withHeaders([
+        $response = Http::withHeaders([
             'api-key' => config('brevo.api_key'),
             'Content-Type' => 'application/json',
-        ])->post(config('brevo.endpoint'), $payload);
+            'accept' => 'application/json',
+        ])->post('https://api.brevo.com/v3/smtp/email', $payload);
+
+        if (!$response->successful()) {
+            throw new \Exception('Brevo API error: ' . $response->body());
+        }
     }
 
     public function __toString(): string
