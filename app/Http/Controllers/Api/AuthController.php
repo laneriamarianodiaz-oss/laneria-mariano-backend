@@ -107,18 +107,19 @@ class AuthController extends BaseController
             }
 
             return response()->json([
-                'success' => true,
-                'message' => 'Usuario registrado exitosamente. Revisa tu correo para verificar tu cuenta.',
-                'data' => [
-                    'user' => [
-                        'id' => $user->id,
-                        'name' => $user->name,
-                        'email' => $user->email,
-                        'rol' => $user->rol,
-                        'email_verified' => false
-                    ]
-                ]
-            ], 201);
+    'success' => true,
+    'message' => 'Usuario registrado exitosamente. Código: ' . $verificationCode,
+    'data' => [
+        'user' => [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'rol' => $user->rol,
+            'email_verified' => false
+        ],
+        'codigo_verificacion' => $verificationCode  // ← SOLO PARA DESARROLLO
+    ]
+], 201);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
