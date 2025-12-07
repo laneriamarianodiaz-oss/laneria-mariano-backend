@@ -1,140 +1,71 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Código de Verificación</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 40px 20px;
-        }
-        .container {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
             max-width: 600px;
             margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            overflow: hidden;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 20px;
         }
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 40px 30px;
-            text-align: center;
-        }
-        .logo {
-            font-size: 48px;
-            margin-bottom: 10px;
-        }
-        .header h1 {
+            background-color: #4A90E2;
             color: white;
-            font-size: 24px;
-            font-weight: 600;
-            margin: 0;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
         }
         .content {
-            padding: 50px 40px;
-            text-align: center;
-        }
-        .greeting {
-            font-size: 20px;
-            color: #333;
-            margin-bottom: 20px;
-        }
-        .message {
-            font-size: 16px;
-            color: #666;
-            line-height: 1.6;
-            margin-bottom: 40px;
-        }
-        .code-box {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-color: #f9f9f9;
             padding: 30px;
-            border-radius: 15px;
-            margin: 30px 0;
+            border: 1px solid #ddd;
+            border-radius: 0 0 5px 5px;
         }
         .code {
-            font-size: 48px;
-            font-weight: bold;
-            color: white;
-            letter-spacing: 10px;
-            font-family: 'Courier New', monospace;
-        }
-        .code-label {
-            color: rgba(255,255,255,0.9);
-            font-size: 14px;
-            margin-top: 10px;
-        }
-        .expiry {
-            background: #fff3cd;
-            border-left: 4px solid #ffc107;
+            background-color: #fff;
+            border: 2px dashed #4A90E2;
             padding: 15px;
-            border-radius: 8px;
-            margin: 30px 0;
-            text-align: left;
-        }
-        .expiry strong {
-            color: #856404;
+            text-align: center;
+            font-size: 32px;
+            font-weight: bold;
+            letter-spacing: 5px;
+            margin: 20px 0;
+            color: #4A90E2;
         }
         .footer {
-            background: #f8f9fa;
-            padding: 30px;
             text-align: center;
-            color: #6c757d;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-        .footer a {
-            color: #667eea;
-            text-decoration: none;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #666;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div class="logo">🧶</div>
-            <h1>Lanería Mariano Díaz</h1>
-        </div>
+    <div class="header">
+        <h1>🔐 Verificación de Email</h1>
+    </div>
+    <div class="content">
+        <p>Hola <strong>{{ $user->name }}</strong>,</p>
         
-        <div class="content">
-            <div class="greeting">
-                ¡Hola {{ $user->name }}! 👋
-            </div>
-            
-            <p class="message">
-                Gracias por registrarte en Lanería Mariano Díaz. Para completar tu registro, 
-                por favor ingresa el siguiente código de verificación:
-            </p>
-            
-            <div class="code-box">
-                <div class="code">{{ $code }}</div>
-                <div class="code-label">Código de Verificación</div>
-            </div>
-            
-            <div class="expiry">
-                <strong>⏱️ Este código expira en 15 minutos.</strong><br>
-                Si no solicitaste este código, puedes ignorar este mensaje.
-            </div>
-        </div>
+        <p>Gracias por registrarte en <strong>Lanería Mariano Díaz</strong>.</p>
         
-        <div class="footer">
-            <p>
-                Este es un correo automático, por favor no respondas.<br>
-                Si tienes alguna duda, contáctanos en 
-                <a href="mailto:laneriamarianodiaz@gmail.com">laneriamarianodiaz@gmail.com</a>
-            </p>
-            <p style="margin-top: 20px; color: #adb5bd; font-size: 12px;">
-                © {{ date('Y') }} Lanería Mariano Díaz. Todos los derechos reservados.<br>
-                Pacucha, Andahuaylas, Apurímac, Perú
-            </p>
-        </div>
+        <p>Tu código de verificación es:</p>
+        
+        <div class="code">{{ $code }}</div>
+        
+        <p>Este código expira en <strong>15 minutos</strong>.</p>
+        
+        <p>Si no solicitaste este registro, puedes ignorar este correo.</p>
+        
+        <p>Saludos,<br><strong>Equipo de Lanería Mariano Díaz</strong></p>
+    </div>
+    <div class="footer">
+        <p>Este es un correo automático, por favor no respondas a este mensaje.</p>
     </div>
 </body>
 </html>
