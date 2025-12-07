@@ -20,7 +20,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/login', [AuthController::class, 'login']);
     });
 
-    // Productos (público - solo activos)
+    // Productos públicos (solo activos)
     Route::get('/productos', [ProductoController::class, 'index']);
     Route::get('/productos/{id}', [ProductoController::class, 'show']);
     Route::get('/productos/tipo/{tipo}', [ProductoController::class, 'porTipo']);
@@ -41,14 +41,12 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::get('/mi-perfil', [AuthController::class, 'miPerfil']);
     });
 
-    // ✅ PRODUCTOS ADMIN - FUERA DEL MIDDLEWARE DE ROL (TEMPORAL)
-    Route::prefix('productos')->group(function () {
-        Route::get('/admin', [ProductoController::class, 'indexAdmin']); // ← MOVIDA AQUÍ
-        Route::post('/', [ProductoController::class, 'store']);
-        Route::post('/subir-imagen', [ProductoController::class, 'subirImagen']);
-        Route::put('/{id}', [ProductoController::class, 'update']);
-        Route::delete('/{id}', [ProductoController::class, 'destroy']);
-    });
+    // ✅ PRODUCTOS ADMIN - MOVIDO AQUÍ (SOLO REQUIERE AUTH, NO ROL)
+    Route::get('/productos/admin', [ProductoController::class, 'indexAdmin']);
+    Route::post('/productos', [ProductoController::class, 'store']);
+    Route::post('/productos/subir-imagen', [ProductoController::class, 'subirImagen']);
+    Route::put('/productos/{id}', [ProductoController::class, 'update']);
+    Route::delete('/productos/{id}', [ProductoController::class, 'destroy']);
 
     // Carrito
     Route::prefix('carrito')->group(function () {
