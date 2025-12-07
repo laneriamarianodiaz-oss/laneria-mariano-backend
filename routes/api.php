@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProductoController;
+use App\Http\Controllers\Api\InventarioController;
 use App\Http\Controllers\Api\VentaController;
 use App\Http\Controllers\Api\ClienteController;
 use App\Http\Controllers\Api\CarritoController;
@@ -49,13 +50,13 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     Route::put('/carrito/actualizar/{detalleId}', [CarritoController::class, 'actualizarCantidad']);
     Route::delete('/carrito/eliminar/{detalleId}', [CarritoController::class, 'eliminarProducto']);
     Route::delete('/carrito/vaciar', [CarritoController::class, 'vaciarCarrito']);
-    Route::post('/carrito/checkout', [CarritoController::class, 'crearVentaDesdeCarrito']); // ✅ AGREGADO
+    Route::post('/carrito/checkout', [CarritoController::class, 'crearVentaDesdeCarrito']);
     
     // ===================================
     // 💰 VENTAS
     // ===================================
     Route::post('/ventas', [VentaController::class, 'store']);
-    Route::post('/ventas/crear', [VentaController::class, 'crearVenta']); // Alias
+    Route::post('/ventas/crear', [VentaController::class, 'crearVenta']);
     Route::get('/ventas', [VentaController::class, 'index']);
     Route::get('/ventas/{id}', [VentaController::class, 'show']);
     Route::put('/ventas/{id}/estado', [VentaController::class, 'actualizarEstado']);
@@ -68,11 +69,24 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
         Route::post('/productos/subir-imagen', [ProductoController::class, 'subirImagen']);
         Route::post('/productos', [ProductoController::class, 'store']);
         Route::put('/productos/{id}', [ProductoController::class, 'update']);
-        Route::post('/productos/{id}', [ProductoController::class, 'update']); // Para FormData
+        Route::post('/productos/{id}', [ProductoController::class, 'update']);
     });
     
     Route::middleware(['role:administrador'])->group(function () {
         Route::delete('/productos/{id}', [ProductoController::class, 'destroy']);
+    });
+    
+    // ===================================
+    // 📊 INVENTARIO (Admin y Vendedor) ✅ AGREGADO
+    // ===================================
+    Route::middleware(['role:administrador,vendedor'])->group(function () {
+        Route::get('/inventario', [InventarioController::class, 'index']);
+        Route::get('/inventario/{productoId}', [InventarioController::class, 'show']);
+        Route::put('/inventario/{productoId}/actualizar-stock', [InventarioController::class, 'actualizarStock']);
+        Route::put('/inventario/{productoId}/stock-minimo', [InventarioController::class, 'actualizarStockMinimo']);
+        Route::get('/inventario/alertas/stock-bajo', [InventarioController::class, 'alertasStockBajo']);
+        Route::get('/inventario/alertas/sin-stock', [InventarioController::class, 'productosSinStock']);
+        Route::get('/inventario/resumen/general', [InventarioController::class, 'resumen']);
     });
     
     // ===================================
