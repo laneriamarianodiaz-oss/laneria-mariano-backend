@@ -219,55 +219,64 @@ class ProductoController extends BaseController
     public function store(Request $request)
 {
     try {
-        $validated = $request->validate([
-            'codigo_lana' => 'required|string|unique:productos',
-            'nombre' => 'required|string|max:255',
-            'tipo_lana' => 'required|string',
-            'precio' => 'required|numeric|min:0',
-            'stock' => 'required|integer|min:0',
-            'color' => 'nullable|string',
-            'talla' => 'nullable|string',
-            'descripcion' => 'nullable|string',
-            'proveedor' => 'nullable|string',
+        // Validación con nombres correctos de la BD
+        $validatedData = $request->validate([
+            'codigo_producto' => 'nullable|string|max:50',  // Opcional, aunque no está en la tabla
+            'nombre_producto' => 'required|string|max:100',
+            'tipo_de_producto' => 'required|string|max:50',
+            'categoria' => 'nullable|string|max:50',
+            'color_producto' => 'nullable|string|max:50',
+            'talla_producto' => 'nullable|string|max:20',
+            'precio_producto' => 'required|numeric|min:0',
+            'stock_disponible' => 'required|integer|min:0',
             'stock_minimo' => 'nullable|integer|min:0',
+            'descripcion' => 'nullable|string',
+            'proveedor_id' => 'nullable|exists:proveedores,proveedor_id',
+            'estado_producto' => 'nullable|in:Activo,Inactivo',
             'imagen' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
-        // SOLO subir imagen SI existe
+        // Subir imagen a Cloudinary si existe
         $imagenUrl = null;
         if ($request->hasFile('imagen')) {
             $imagenUrl = $this->subirImagen($request->file('imagen'));
         }
 
+        // Crear producto con nombres correctos
         $producto = Producto::create([
-            'codigo_lana' => $validated['codigo_lana'],
-            'nombre' => $validated['nombre'],
-            'tipo_lana' => $validated['tipo_lana'],
-            'precio' => $validated['precio'],
-            'stock' => $validated['stock'],
-            'color' => $validated['color'] ?? null,
-            'talla' => $validated['talla'] ?? null,
-            'descripcion' => $validated['descripcion'] ?? null,
-            'proveedor' => $validated['proveedor'] ?? null,
-            'stock_minimo' => $validated['stock_minimo'] ?? 0,
+            'nombre_producto' => $validatedData['nombre_producto'],
+            'tipo_de_producto' => $validatedData['tipo_de_producto'],
+            'categoria' => $validatedData['categoria'] ?? null,
+            'color_producto' => $validatedData['color_producto'] ?? null,
+            'talla_producto' => $validatedData['talla_producto'] ?? null,
+            'precio_producto' => $validatedData['precio_producto'],
+            'stock_disponible' => $validatedData['stock_disponible'],
+            'stock_minimo' => $validatedData['stock_minimo'] ?? 0,
+            'descripcion' => $validatedData['descripcion'] ?? null,
             'imagen_url' => $imagenUrl,
+            'proveedor_id' => $validatedData['proveedor_id'] ?? null,
+            'estado_producto' => $validatedData['estado_producto'] ?? 'Activo',
         ]);
 
         return response()->json([
             'success' => true,
+            'message' => 'Producto creado exitosamente',
             'data' => $producto
         ], 201);
 
-    } catch (\Illuminate\Validation\ValidationException $e) {
+    } catch (ValidationException $e) {
         return response()->json([
             'success' => false,
             'message' => 'Error de validación',
             'errors' => $e->errors()
         ], 422);
     } catch (\Exception $e) {
+        Log::error('Error al crear producto: ' . $e->getMessage());
+        
         return response()->json([
             'success' => false,
-            'message' => 'Error al crear producto: ' . $e->getMessage()
+            'message' => 'Error al crear el producto',
+            'error' => $e->getMessage()
         ], 500);
     }
 }
