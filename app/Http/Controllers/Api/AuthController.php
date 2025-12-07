@@ -63,13 +63,12 @@ class AuthController extends BaseController
 
             // Enviar email con código
             try {
-                \Log::info('🔵 Intentando enviar email a: ' . $user->email);
-                \Log::info('🔵 MAIL_MAILER: ' . config('mail.default'));
-                \Log::info('🔵 BREVO_API_KEY existe: ' . (config('brevo.api_key') ? 'SÍ' : 'NO'));
-                
+                \Log::error('🔵 Intentando enviar email a: ' . $user->email);
+\Log::error('🔵 MAIL_MAILER: ' . config('mail.default'));
+\Log::error('🔵 BREVO_API_KEY existe: ' . (config('brevo.api_key') ? 'SÍ' : 'NO'));
                 Mail::to($user->email)->send(new VerificationCodeMail($user, $verificationCode));
                 
-                \Log::info('✅ Email enviado exitosamente');
+                \Log::error('✅ Email enviado exitosamente');
             } catch (\Exception $e) {
                 \Log::error('❌ Error al enviar email: ' . $e->getMessage());
                 \Log::error('❌ Stack trace: ' . $e->getTraceAsString());
