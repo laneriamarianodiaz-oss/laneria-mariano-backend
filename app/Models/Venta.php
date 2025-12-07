@@ -12,8 +12,8 @@ class Venta extends Model
     protected $table = 'ventas';
     protected $primaryKey = 'venta_id';
     
-    // ✅ DESACTIVAR TIMESTAMPS si la tabla NO tiene created_at y updated_at
-    public $timestamps = false; // ← AGREGADO
+    // ✅ LA TABLA SÍ TIENE created_at y updated_at, así que SE ACTIVAN
+    public $timestamps = true;
 
     protected $fillable = [
         'cliente_id',
@@ -32,6 +32,8 @@ class Venta extends Model
     protected $casts = [
         'fecha_venta' => 'datetime',
         'total_venta' => 'decimal:2',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
     // Appends para que siempre incluya estos campos virtuales
@@ -58,12 +60,9 @@ class Venta extends Model
      */
     public function getSubtotalAttribute()
     {
-        // Solo calcular si los detalles ya están cargados
         if ($this->relationLoaded('detalles') && $this->detalles) {
             return $this->detalles->sum('subtotal');
         }
-        
-        // Si no hay detalles cargados, retornar el total_venta como subtotal
         return $this->total_venta ?? 0;
     }
 
@@ -72,12 +71,10 @@ class Venta extends Model
      */
     public function getDescuentoAttribute()
     {
-        // Solo calcular si hay detalles cargados
         if ($this->relationLoaded('detalles') && $this->detalles) {
             $subtotal = $this->detalles->sum('subtotal');
             return max(0, $subtotal - $this->total_venta);
         }
-        
         return 0;
     }
 
