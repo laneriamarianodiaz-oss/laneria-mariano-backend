@@ -267,10 +267,16 @@ class AuthController extends BaseController
 
         // Enviar email
         try {
-            Mail::to($user->email)->send(new PasswordResetMail($user, $resetUrl));
-        } catch (\Exception $e) {
-            \Log::error('Error al enviar email de recuperación: ' . $e->getMessage());
-            
+    \Log::info('🔵 Intentando enviar email a: ' . $user->email);
+    \Log::info('🔵 MAIL_MAILER: ' . config('mail.default'));
+    \Log::info('🔵 BREVO_API_KEY existe: ' . (config('brevo.api_key') ? 'SÍ' : 'NO'));
+    
+    Mail::to($user->email)->send(new VerificationCodeMail($user, $verificationCode));
+    
+    \Log::info('✅ Email enviado exitosamente');
+} catch (\Exception $e) {
+    \Log::error('❌ Error al enviar email: ' . $e->getMessage());
+    \Log::error('❌ Stack trace: ' . $e->getTraceAsString());
             return response()->json([
                 'success' => false,
                 'message' => 'Error al enviar el correo. Intenta de nuevo.'
