@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Validator;
 class AuthController extends BaseController
 {
     /**
-     * 📝 REGISTRO SIMPLE (SIN VERIFICACIÓN)
+     * 📝 REGISTRO SIMPLE
      */
     public function register(Request $request)
     {
@@ -21,17 +21,16 @@ class AuthController extends BaseController
                 'email' => 'required|string|email|max:255|unique:users',
                 'password' => 'required|string|min:6',
                 'password_confirmation' => 'required|same:password',
-                'telefono' => 'required|string|max:15',
+                'telefono' => 'required|string|max:20',
             ]);
 
-            // Crear usuario
+            // Crear usuario verificado automáticamente
             $user = User::create([
                 'name' => $validatedData['name'],
                 'email' => $validatedData['email'],
                 'password' => Hash::make($validatedData['password']),
                 'rol' => 'cliente',
-                'email_verified_at' => now(), // ← Ya verificado
-                'email_verified' => true,
+                'email_verified_at' => now(),
             ]);
 
             // Crear cliente asociado
