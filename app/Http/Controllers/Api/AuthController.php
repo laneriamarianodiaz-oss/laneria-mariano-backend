@@ -63,16 +63,47 @@ class AuthController extends BaseController
 
             // Enviar email con código
             try {
-                \Log::error('🔵 Intentando enviar email a: ' . $user->email);
-\Log::error('🔵 MAIL_MAILER: ' . config('mail.default'));
-\Log::error('🔵 BREVO_API_KEY existe: ' . (config('brevo.api_key') ? 'SÍ' : 'NO'));
-                Mail::to($user->email)->send(new VerificationCodeMail($user, $verificationCode));
+                \Log::error('🔵 DEBUG: Iniciando envío de email');
+                \Log::error('🔵 Email destino: ' . $user->email);
+                \Log::error('🔵 Código: ' . $verificationCode);
                 
-                \Log::error('✅ Email enviado exitosamente');
+                // LLAMADA DIRECTA A BREVO API
+                $response = \Illuminate\Support\Facades\Http::withHeaders([
+                    'api-key' => env('BREVO_API_KEY'),
+                    'Content-Type' => 'application/json',
+                    'accept' => 'application/json',
+                ])->post('https://api.brevo.com/v3/smtp/email', [
+                    'sender' => [
+                        'name' => 'Lanería Mariano Díaz',
+                        'email' => 'laneriamarianodiaz@gmail.com',
+                    ],
+                    'to' => [
+                        [
+                            'email' => $user->email,
+                            'name' => $user->name,
+                        ]
+                    ],
+                    'subject' => '🔐 Código de Verificación - Lanería Mariano Díaz',
+                    'htmlContent' => "
+                        <h1>Hola {$user->name}</h1>
+                        <p>Tu código de verificación es:</p>
+                        <h2 style='color: #4A90E2; font-size: 32px; letter-spacing: 5px;'>{$verificationCode}</h2>
+                        <p>Este código expira en 15 minutos.</p>
+                    ",
+                ]);
+                
+                \Log::error('🔵 Response status: ' . $response->status());
+                \Log::error('🔵 Response body: ' . $response->body());
+                
+                if ($response->successful()) {
+                    \Log::error('✅ Email enviado exitosamente vía Brevo API');
+                } else {
+                    \Log::error('❌ Error en Brevo: ' . $response->body());
+                }
+                
             } catch (\Exception $e) {
-                \Log::error('❌ Error al enviar email: ' . $e->getMessage());
-                \Log::error('❌ Stack trace: ' . $e->getTraceAsString());
-                // Continuar aunque falle el email
+                \Log::error('❌ Exception al enviar email: ' . $e->getMessage());
+                \Log::error('❌ Stack: ' . $e->getTraceAsString());
             }
 
             return response()->json([
@@ -187,8 +218,34 @@ class AuthController extends BaseController
         $user->verification_code_expires_at = now()->addMinutes(15);
         $user->save();
 
-        // Enviar email
-        Mail::to($user->email)->send(new VerificationCodeMail($user, $verificationCode));
+        // Enviar email directamente con Brevo API
+        try {
+            $response = \Illuminate\Support\Facades\Http::withHeaders([
+                'api-key' => env('BREVO_API_KEY'),
+                'Content-Type' => 'application/json',
+                'accept' => 'application/json',
+            ])->post('https://api.brevo.com/v3/smtp/email', [
+                'sender' => [
+                    'name' => 'Lanería Mariano Díaz',
+                    'email' => 'laneriamarianodiaz@gmail.com',
+                ],
+                'to' => [
+                    [
+                        'email' => $user->email,
+                        'name' => $user->name,
+                    ]
+                ],
+                'subject' => '🔐 Código de Verificación - Lanería Mariano Díaz',
+                'htmlContent' => "
+                    <h1>Hola {$user->name}</h1>
+                    <p>Tu código de verificación es:</p>
+                    <h2 style='color: #4A90E2; font-size: 32px; letter-spacing: 5px;'>{$verificationCode}</h2>
+                    <p>Este código expira en 15 minutos.</p>
+                ",
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error al reenviar email: ' . $e->getMessage());
+        }
 
         return $this->successResponse(null, '📧 Código de verificación reenviado');
     }
@@ -271,9 +328,37 @@ class AuthController extends BaseController
             // URL del frontend
             $resetUrl = env('FRONTEND_URL', 'https://laneria-mariano-frontend.vercel.app') . '/autenticacion/restablecer-contrasena?token=' . $token . '&email=' . urlencode($user->email);
 
-            // Enviar email
+            // Enviar email directamente con Brevo API
             try {
-                Mail::to($user->email)->send(new PasswordResetMail($user, $resetUrl));
+                $response = \Illuminate\Support\Facades\Http::withHeaders([
+                    'api-key' => env('BREVO_API_KEY'),
+                    'Content-Type' => 'application/json',
+                    'accept' => 'application/json',
+                ])->post('https://api.brevo.com/v3/smtp/email', [
+                    'sender' => [
+                        'name' => 'Lanería Mariano Díaz',
+                        'email' => 'laneriamarianodiaz@gmail.com',
+                    ],
+                    'to' => [
+                        [
+                            'email' => $user->email,
+                            'name' => $user->name,
+                        ]
+                    ],
+                    'subject' => '🔑 Recuperación de Contraseña - Lanería Mariano Díaz',
+                    'htmlContent' => "
+                        <h1>Hola {$user->name}</h1>
+                        <p>Recibimos una solicitud para restablecer tu contraseña.</p>
+                        <p>Haz clic en el siguiente enlace para crear una nueva contraseña:</p>
+                        <a href='{$resetUrl}' style='background-color: #4A90E2; color: white; padding: 10px 20px; text-decoration: none; display: inline-block; border-radius: 5px;'>Restablecer Contraseña</a>
+                        <p>Este enlace expira en 1 hora.</p>
+                        <p>Si no solicitaste este cambio, puedes ignorar este correo.</p>
+                    ",
+                ]);
+                
+                if (!$response->successful()) {
+                    throw new \Exception('Error en Brevo: ' . $response->body());
+                }
             } catch (\Exception $e) {
                 \Log::error('Error al enviar email de recuperación: ' . $e->getMessage());
                 
