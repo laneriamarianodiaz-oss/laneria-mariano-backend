@@ -118,5 +118,6 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     
     Route::middleware(['role:administrador'])->group(function () {
         Route::delete('/clientes/{id}', [ClienteController::class, 'destroy']);
+   
     });
 });
