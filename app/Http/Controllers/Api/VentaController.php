@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
 class VentaController extends BaseController
 {
@@ -75,7 +76,6 @@ class VentaController extends BaseController
      */
     public function listarPedidos(Request $request)
     {
-        // ⚠️ IMPORTANTE: SIEMPRE cargar las relaciones
         $query = Venta::with(['cliente', 'detalles.producto', 'comprobante']);
 
         // Filtros
@@ -94,7 +94,6 @@ class VentaController extends BaseController
         // Ordenar por más recientes
         $ventas = $query->orderBy('fecha_venta', 'desc')->get();
 
-        // 🔍 LOG para debug
         \Log::info('📦 Ventas encontradas:', [
             'cantidad' => $ventas->count(),
             'primera_venta_id' => $ventas->first()?->venta_id,
@@ -103,7 +102,6 @@ class VentaController extends BaseController
             'cantidad_detalles' => $ventas->first()?->detalles?->count()
         ]);
 
-        // ✅ MAPEAR usando el método que ya existe
         $ventasMapeadas = $ventas->map(function ($venta) {
             return $this->mapearVenta($venta);
         });
@@ -132,7 +130,6 @@ class VentaController extends BaseController
 
         $ventas = $query->orderBy('fecha_venta', 'desc')->get();
 
-        // Mapear datos
         $ventasMapeadas = $ventas->map(function ($venta) {
             return $this->mapearVenta($venta);
         });
@@ -249,6 +246,89 @@ class VentaController extends BaseController
     }
 
     /**
+     * 📸 SUBIR COMPROBANTE DE PAGO A CLOUDINARY
+     */
+    public function subirComprobante(Request $request, $id)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'comprobante' => 'required|image|mimes:jpeg,png,jpg,gif,webp,pdf|max:10240', // 10MB
+                'codigo_operacion' => 'nullable|string|max:50'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $venta = Venta::find($id);
+
+            if (!$venta) {
+                return $this->notFoundResponse('Venta no encontrada');
+            }
+
+            if ($request->hasFile('comprobante')) {
+                $comprobante = $request->file('comprobante');
+                
+                // ✅ SUBIR A CLOUDINARY
+                $uploadedFile = Cloudinary::upload(
+                    $comprobante->getRealPath(),
+                    [
+                        'folder' => 'laneria-mariano/comprobantes',
+                        'resource_type' => 'auto', // Acepta imágenes y PDFs
+                        'transformation' => [
+                            'width' => 1200,
+                            'height' => 1600,
+                            'crop' => 'limit',
+                            'quality' => 'auto'
+                        ]
+                    ]
+                );
+
+                $url = $uploadedFile->getSecurePath();
+                $publicId = $uploadedFile->getPublicId();
+
+                // Actualizar venta con comprobante
+                $venta->comprobante_pago = $url;
+                if ($request->filled('codigo_operacion')) {
+                    $venta->codigo_operacion = $request->codigo_operacion;
+                }
+                $venta->save();
+
+                Log::info('✅ Comprobante subido a Cloudinary:', [
+                    'venta_id' => $venta->venta_id,
+                    'url' => $url,
+                    'public_id' => $publicId
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Comprobante subido exitosamente',
+                    'data' => [
+                        'comprobante_url' => $url,
+                        'public_id' => $publicId,
+                        'venta' => $this->mapearVenta($venta)
+                    ]
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No se recibió ningún comprobante'
+            ], 400);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Error al subir comprobante: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al subir comprobante: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * CANCELAR PEDIDO (CLIENTE o ADMIN)
      */
     public function cancelar(Request $request, $id)
@@ -259,7 +339,7 @@ class VentaController extends BaseController
             return $this->notFoundResponse('Venta no encontrada');
         }
 
-        // Verificar permisos: solo el cliente dueño o un admin puede cancelar
+        // Verificar permisos
         $usuario = $request->user();
         $cliente = $usuario->cliente;
         
@@ -406,130 +486,6 @@ class VentaController extends BaseController
         }
     }
 
-/**
- * SUBIR COMPROBANTE DE PAGO - CON LOGS DETALLADOS
- */
-public function subirComprobante(Request $request, $id)
-{
-    \Log::info('🔥 === INICIO subirComprobante ===', [
-        'venta_id' => $id,
-        'request_all' => $request->all(),
-        'tiene_archivo' => $request->hasFile('comprobante'),
-        'codigo_operacion' => $request->codigo_operacion ?? 'NO ENVIADO'
-    ]);
-
-    $validator = Validator::make($request->all(), [
-        'comprobante' => 'required|image|mimes:jpeg,jpg,png|max:5120',
-        'codigo_operacion' => 'required|string|max:50',
-    ]);
-
-    if ($validator->fails()) {
-        \Log::error('❌ Validación fallida:', $validator->errors()->toArray());
-        return response()->json([
-            'success' => false,
-            'errors' => $validator->errors()
-        ], 422);
-    }
-
-    $venta = Venta::find($id);
-
-    if (!$venta) {
-        \Log::error('❌ Venta no encontrada:', ['id' => $id]);
-        return response()->json([
-            'success' => false,
-            'message' => 'Venta no encontrada'
-        ], 404);
-    }
-
-    try {
-        $comprobantesPath = public_path('comprobantes');
-        
-        \Log::info('📂 Verificando carpeta:', [
-            'path' => $comprobantesPath,
-            'existe' => is_dir($comprobantesPath) ? 'SÍ' : 'NO',
-            'es_escribible' => is_writable(public_path()) ? 'SÍ' : 'NO'
-        ]);
-
-        // Crear carpeta si no existe
-        if (!is_dir($comprobantesPath)) {
-            $created = mkdir($comprobantesPath, 0777, true);
-            \Log::info('📁 Intento crear carpeta:', ['exito' => $created ? 'SÍ' : 'NO']);
-        }
-
-        // Eliminar comprobante anterior
-        if ($venta->comprobante_pago) {
-            $archivoAntiguo = public_path($venta->comprobante_pago);
-            if (file_exists($archivoAntiguo)) {
-                @unlink($archivoAntiguo);
-                \Log::info('🗑️ Archivo anterior eliminado');
-            }
-        }
-
-        // Guardar nueva imagen
-        $file = $request->file('comprobante');
-        $nombreArchivo = 'comprobante_' . $venta->numero_venta . '_' . time() . '.' . $file->getClientOriginalExtension();
-        
-        \Log::info('💾 Intentando guardar archivo:', [
-            'nombre' => $nombreArchivo,
-            'tamaño' => $file->getSize(),
-            'mime' => $file->getMimeType(),
-            'ruta_destino' => $comprobantesPath
-        ]);
-
-        // Mover archivo
-        $moved = $file->move($comprobantesPath, $nombreArchivo);
-        
-        \Log::info('✅ Archivo movido:', [
-            'exito' => $moved ? 'SÍ' : 'NO',
-            'ruta_completa' => $comprobantesPath . DIRECTORY_SEPARATOR . $nombreArchivo
-        ]);
-
-        // Verificar que el archivo se guardó
-        $archivoFinal = $comprobantesPath . DIRECTORY_SEPARATOR . $nombreArchivo;
-        if (!file_exists($archivoFinal)) {
-            throw new \Exception("El archivo no se guardó correctamente en: {$archivoFinal}");
-        }
-
-        $path = 'comprobantes/' . $nombreArchivo;
-        $comprobanteUrl = url($path);
-
-        // Actualizar venta
-        $venta->comprobante_pago = $path;
-        $venta->codigo_operacion = $request->codigo_operacion;
-        $venta->save();
-
-        \Log::info('✅ === ÉXITO ===', [
-            'venta_id' => $venta->venta_id,
-            'numero_venta' => $venta->numero_venta,
-            'ruta_bd' => $path,
-            'url' => $comprobanteUrl,
-            'codigo_operacion' => $venta->codigo_operacion,
-            'archivo_existe' => file_exists($archivoFinal) ? 'SÍ' : 'NO'
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Comprobante subido exitosamente',
-            'data' => [
-                'comprobante_url' => $comprobanteUrl,
-                'codigo_operacion' => $venta->codigo_operacion
-            ]
-        ]);
-
-    } catch (\Exception $e) {
-        \Log::error("❌ === ERROR CRÍTICO ===", [
-            'mensaje' => $e->getMessage(),
-            'archivo' => $e->getFile(),
-            'linea' => $e->getLine(),
-            'trace' => $e->getTraceAsString()
-        ]);
-        
-        return response()->json([
-            'success' => false,
-            'message' => 'Error al subir comprobante: ' . $e->getMessage()
-        ], 500);
-    }
-}
     /**
      * Validar transiciones de estado
      */
@@ -557,21 +513,23 @@ public function subirComprobante(Request $request, $id)
      */
     private function mapearVenta($venta)
     {
-        // ✅ FORZAR carga de relaciones si no están presentes
+        // Forzar carga de relaciones si no están presentes
         if (!$venta->relationLoaded('cliente')) {
             $venta->load('cliente');
         }
         if (!$venta->relationLoaded('detalles')) {
             $venta->load('detalles.producto');
         }
- Log::info('🔍 MAPEAR VENTA DEBUG:', [
-        'venta_id' => $venta->venta_id,
-        'tiene_cliente' => $venta->cliente ? 'SÍ' : 'NO',
-        'cliente_nombre' => $venta->cliente->nombre_cliente ?? 'NULL',
-        'cliente_email' => $venta->cliente->email ?? 'NULL',
-        'cantidad_detalles' => $venta->detalles->count(),
-        'detalles_ids' => $venta->detalles->pluck('detalle_venta_id')->toArray(),
-    ]);
+
+        Log::info('🔍 MAPEAR VENTA DEBUG:', [
+            'venta_id' => $venta->venta_id,
+            'tiene_cliente' => $venta->cliente ? 'SÍ' : 'NO',
+            'cliente_nombre' => $venta->cliente->nombre_cliente ?? 'NULL',
+            'cliente_email' => $venta->cliente->email ?? 'NULL',
+            'cantidad_detalles' => $venta->detalles->count(),
+            'detalles_ids' => $venta->detalles->pluck('detalle_venta_id')->toArray(),
+        ]);
+
         return [
             'venta_id' => $venta->venta_id,
             'numero_venta' => $venta->numero_venta,
@@ -581,7 +539,7 @@ public function subirComprobante(Request $request, $id)
             'cliente_nombre' => $venta->cliente->nombre_cliente ?? 'Cliente',
             'cliente_telefono' => $venta->cliente->telefono ?? $venta->telefono_contacto ?? 'No especificado',
             
-            // ✅ Objeto cliente completo
+            // Objeto cliente completo
             'cliente' => [
                 'cliente_id' => $venta->cliente->cliente_id ?? null,
                 'nombre_cliente' => $venta->cliente->nombre_cliente ?? 'Cliente',
@@ -602,36 +560,36 @@ public function subirComprobante(Request $request, $id)
             'telefono_contacto' => $venta->telefono_contacto,
             'observaciones' => $venta->observaciones,
             
-            // ✅ Comprobante de pago
-            'comprobante_pago' => $venta->comprobante_pago ? 'https://laneria-mariano-frontend.vercel.app/' . $venta->comprobante_pago : null,
-'codigo_operacion' => $venta->codigo_operacion,
+            // ✅ Comprobante de pago (URL de Cloudinary)
+            'comprobante_pago' => $venta->comprobante_pago,
+            'codigo_operacion' => $venta->codigo_operacion,
             
-            // ✅ Items con imágenes - CONVERSIÓN A ARRAY EXPLÍCITA
+            // Items con imágenes
             'items' => $venta->detalles->map(function ($detalle) {
-    $producto = $detalle->producto;
-    return [
-        'producto_id' => $detalle->producto_id,
-        'nombre_producto' => $producto->nombre_producto ?? 'Producto eliminado',
-        'imagen_url' => $producto->imagen_url ?? null,
-        'cantidad' => $detalle->cantidad,
-        'precio_unitario' => (float) $detalle->precio_unitario,
-        'subtotal' => (float) $detalle->subtotal,
-    ];
-})->toArray(), // ✅ IMPORTANTE: Convertir a array
+                $producto = $detalle->producto;
+                return [
+                    'producto_id' => $detalle->producto_id,
+                    'nombre_producto' => $producto->nombre_producto ?? 'Producto eliminado',
+                    'imagen_url' => $producto->imagen_url ?? null,
+                    'cantidad' => $detalle->cantidad,
+                    'precio_unitario' => (float) $detalle->precio_unitario,
+                    'subtotal' => (float) $detalle->subtotal,
+                ];
+            })->toArray(),
 
-            // ✅ PRODUCTOS - Alias de items para compatibilidad con frontend
+            // Alias de items para compatibilidad
             'productos' => $venta->detalles->map(function ($detalle) {
-    $producto = $detalle->producto;
-    return [
-        'producto_id' => $detalle->producto_id,
-        'nombre' => $producto->nombre_producto ?? 'Producto eliminado',
-        'nombre_producto' => $producto->nombre_producto ?? 'Producto eliminado',
-        'imagen_url' => $producto->imagen_url ?? null,
-        'cantidad' => $detalle->cantidad,
-        'precio_unitario' => (float) $detalle->precio_unitario,
-        'subtotal' => (float) $detalle->subtotal,
-    ];
-})->toArray(),
+                $producto = $detalle->producto;
+                return [
+                    'producto_id' => $detalle->producto_id,
+                    'nombre' => $producto->nombre_producto ?? 'Producto eliminado',
+                    'nombre_producto' => $producto->nombre_producto ?? 'Producto eliminado',
+                    'imagen_url' => $producto->imagen_url ?? null,
+                    'cantidad' => $detalle->cantidad,
+                    'precio_unitario' => (float) $detalle->precio_unitario,
+                    'subtotal' => (float) $detalle->subtotal,
+                ];
+            })->toArray(),
         ];
     }
 }

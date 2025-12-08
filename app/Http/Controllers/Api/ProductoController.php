@@ -1,6 +1,5 @@
 <?php
 
-
 namespace App\Http\Controllers\Api;
 
 use App\Models\Producto;
@@ -8,6 +7,7 @@ use App\Models\Inventario;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
 class ProductoController extends BaseController
@@ -214,76 +214,106 @@ class ProductoController extends BaseController
     }
 
     /**
-     * Crear nuevo producto
+     * Crear nuevo producto CON CLOUDINARY
      */
     public function store(Request $request)
-{
-    try {
-        // Validación con nombres correctos de la BD
-        $validatedData = $request->validate([
-            'codigo_producto' => 'required|string|max:50|unique:productos,codigo_producto', // ✅ Ahora requerido y único
-            'nombre_producto' => 'required|string|max:100',
-            'tipo_de_producto' => 'required|string|max:50',
-            'categoria' => 'nullable|string|max:50',
-            'color_producto' => 'nullable|string|max:50',
-            'talla_producto' => 'nullable|string|max:20',
-            'precio_producto' => 'required|numeric|min:0',
-            'stock_disponible' => 'required|integer|min:0',
-            'stock_minimo' => 'nullable|integer|min:0',
-            'descripcion' => 'nullable|string',
-            'proveedor_id' => 'nullable|exists:proveedores,proveedor_id',
-            'estado_producto' => 'nullable|in:Activo,Inactivo',
-            'imagen' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-        ]);
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'codigo_producto' => 'required|string|max:50|unique:productos,codigo_producto',
+                'nombre_producto' => 'required|string|max:100',
+                'tipo_de_producto' => 'required|string|max:50',
+                'categoria' => 'nullable|string|max:50',
+                'color_producto' => 'nullable|string|max:50',
+                'talla_producto' => 'nullable|string|max:20',
+                'precio_producto' => 'required|numeric|min:0',
+                'stock_disponible' => 'required|integer|min:0',
+                'stock_minimo' => 'nullable|integer|min:0',
+                'descripcion' => 'nullable|string',
+                'proveedor_id' => 'nullable|exists:proveedores,proveedor_id',
+                'estado_producto' => 'nullable|in:Activo,Inactivo',
+                'imagen' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            ]);
 
-        // Subir imagen a Cloudinary si existe
-        $imagenUrl = null;
-        if ($request->hasFile('imagen')) {
-            $imagenUrl = $this->subirImagen($request->file('imagen'));
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            DB::beginTransaction();
+            try {
+                // ✅ SUBIR IMAGEN A CLOUDINARY SI EXISTE
+                $imagenUrl = null;
+                if ($request->hasFile('imagen')) {
+                    $imagen = $request->file('imagen');
+                    
+                    $uploadedFile = Cloudinary::upload(
+                        $imagen->getRealPath(),
+                        [
+                            'folder' => 'laneria-mariano/productos',
+                            'transformation' => [
+                                'width' => 800,
+                                'height' => 800,
+                                'crop' => 'limit',
+                                'quality' => 'auto'
+                            ]
+                        ]
+                    );
+
+                    $imagenUrl = $uploadedFile->getSecurePath();
+                    
+                    Log::info('✅ Imagen subida a Cloudinary:', ['url' => $imagenUrl]);
+                }
+
+                // Crear producto
+                $producto = Producto::create([
+                    'codigo_producto' => $request->codigo_producto,
+                    'nombre_producto' => $request->nombre_producto,
+                    'tipo_de_producto' => $request->tipo_de_producto,
+                    'categoria' => $request->categoria,
+                    'color_producto' => $request->color_producto,
+                    'talla_producto' => $request->talla_producto,
+                    'precio_producto' => $request->precio_producto,
+                    'stock_disponible' => $request->stock_disponible,
+                    'stock_minimo' => $request->stock_minimo ?? 0,
+                    'descripcion' => $request->descripcion,
+                    'imagen_url' => $imagenUrl,
+                    'proveedor_id' => $request->proveedor_id,
+                    'estado_producto' => $request->estado_producto ?? 'Activo',
+                ]);
+
+                DB::commit();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Producto creado exitosamente',
+                    'data' => $this->mapearProducto($producto)
+                ], 201);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error('Error al crear producto: ' . $e->getMessage());
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al crear el producto',
+                    'error' => $e->getMessage()
+                ], 500);
+            }
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de validación',
+                'error' => $e->getMessage()
+            ], 422);
         }
-
-        // Crear producto con nombres correctos
-        $producto = Producto::create([
-            'codigo_producto' => $validatedData['codigo_producto'], // ✅ Agregado
-            'nombre_producto' => $validatedData['nombre_producto'],
-            'tipo_de_producto' => $validatedData['tipo_de_producto'],
-            'categoria' => $validatedData['categoria'] ?? null,
-            'color_producto' => $validatedData['color_producto'] ?? null,
-            'talla_producto' => $validatedData['talla_producto'] ?? null,
-            'precio_producto' => $validatedData['precio_producto'],
-            'stock_disponible' => $validatedData['stock_disponible'],
-            'stock_minimo' => $validatedData['stock_minimo'] ?? 0,
-            'descripcion' => $validatedData['descripcion'] ?? null,
-            'imagen_url' => $imagenUrl,
-            'proveedor_id' => $validatedData['proveedor_id'] ?? null,
-            'estado_producto' => $validatedData['estado_producto'] ?? 'Activo',
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Producto creado exitosamente',
-            'data' => $producto
-        ], 201);
-
-    } catch (ValidationException $e) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Error de validación',
-            'errors' => $e->errors()
-        ], 422);
-    } catch (\Exception $e) {
-        Log::error('Error al crear producto: ' . $e->getMessage());
-        
-        return response()->json([
-            'success' => false,
-            'message' => 'Error al crear el producto',
-            'error' => $e->getMessage()
-        ], 500);
     }
-}
 
     /**
-     * Actualizar producto
+     * Actualizar producto CON CLOUDINARY
      */
     public function update(Request $request, $id)
     {
@@ -297,13 +327,13 @@ class ProductoController extends BaseController
             'codigo_producto' => 'string|max:50|unique:productos,codigo_producto,' . $id . ',producto_id',
             'nombre_producto' => 'string|max:100',
             'tipo_de_producto' => 'string|max:50',
+            'categoria' => 'nullable|string|max:50',
             'color_producto' => 'nullable|string|max:50',
             'talla_producto' => 'nullable|string|max:20',
             'precio_producto' => 'numeric|min:0',
             'stock_disponible' => 'integer|min:0',
             'stock_minimo' => 'integer|min:0',
             'descripcion' => 'nullable|string',
-            'imagen_url' => 'nullable|string',
             'proveedor_id' => 'nullable|exists:proveedores,proveedor_id',
             'estado_producto' => 'in:Activo,Inactivo',
             'imagen' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120'
@@ -315,7 +345,7 @@ class ProductoController extends BaseController
 
         DB::beginTransaction();
         try {
-            // Si viene nueva imagen, subir a Cloudinary
+            // ✅ SI VIENE NUEVA IMAGEN, SUBIR A CLOUDINARY
             if ($request->hasFile('imagen')) {
                 $imagen = $request->file('imagen');
                 
@@ -333,6 +363,8 @@ class ProductoController extends BaseController
                 );
 
                 $request->merge(['imagen_url' => $uploadedFile->getSecurePath()]);
+                
+                Log::info('✅ Imagen actualizada en Cloudinary:', ['url' => $uploadedFile->getSecurePath()]);
             }
 
             $producto->update($request->only([

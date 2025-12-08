@@ -60,7 +60,7 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     Route::post('/carrito/checkout', [CarritoController::class, 'crearVentaDesdeCarrito']);
     
     // ===================================
-    // 💰 VENTAS
+    // 💰 VENTAS Y COMPROBANTES
     // ===================================
     Route::post('/ventas', [VentaController::class, 'store']);
     Route::post('/ventas/crear', [VentaController::class, 'crearVenta']);
@@ -68,6 +68,9 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     Route::get('/ventas/{id}', [VentaController::class, 'show']);
     Route::put('/ventas/{id}/estado', [VentaController::class, 'actualizarEstado']);
     Route::get('/mis-ventas', [VentaController::class, 'misVentas']);
+    
+    // 📸 SUBIR COMPROBANTE (Cliente puede subir después de hacer pedido)
+    Route::post('/ventas/{id}/comprobante', [VentaController::class, 'subirComprobante']);
     
     // ===================================
     // 📦 PRODUCTOS (Admin y Vendedor)
