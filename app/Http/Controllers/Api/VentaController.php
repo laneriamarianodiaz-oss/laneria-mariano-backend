@@ -378,99 +378,135 @@ class VentaController extends BaseController
      * Registrar nueva venta (POS / Carrito)
      */
     public function store(Request $request)
-    {
+{
+    try {
         $validator = Validator::make($request->all(), [
-            'cliente_id' => 'required|exists:clientes,cliente_id',
-            'items' => 'required|array|min:1',
-            'items.*.producto_id' => 'required|exists:productos,producto_id',
-            'items.*.cantidad' => 'required|integer|min:1',
-            'items.*.precio_unitario' => 'required|numeric|min:0',
-            'metodo_pago' => 'required|in:Efectivo,Yape,Plin,Transferencia,Tarjeta',
-            'canal_venta' => 'nullable|in:Tienda física,WhatsApp,Redes sociales,Web,Teléfono,Otro',
+            'metodo_pago' => 'required|string',
             'direccion_envio' => 'nullable|string|max:255',
             'telefono_contacto' => 'nullable|string|max:20',
-            'observaciones' => 'nullable|string|max:500',
-            'descuento' => 'nullable|numeric|min:0',
+            'observaciones' => 'nullable|string',
+            // ⭐ AGREGAR VALIDACIÓN DE COMPROBANTE
+            'comprobante_pago' => 'nullable|string|max:500',  // URL de Cloudinary
+            'codigo_operacion' => 'nullable|string|max:50'
         ]);
 
         if ($validator->fails()) {
-            return $this->validationErrorResponse($validator->errors());
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $user = Auth::user();
+        $cliente = $user->cliente;
+
+        if (!$cliente) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Usuario no tiene perfil de cliente asociado'
+            ], 403);
+        }
+
+        // Obtener carrito del usuario
+        $carrito = Carrito::where('cliente_id', $cliente->cliente_id)->first();
+
+        if (!$carrito || $carrito->detalles->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El carrito está vacío'
+            ], 400);
         }
 
         DB::beginTransaction();
+
         try {
-            // Verificar stock disponible
-            foreach ($request->items as $item) {
-                $producto = Producto::find($item['producto_id']);
-                
-                if (!$producto) {
-                    return $this->errorResponse("Producto ID {$item['producto_id']} no encontrado", 404);
-                }
-
-                if ($producto->stock_disponible < $item['cantidad']) {
-                    return $this->errorResponse(
-                        "Stock insuficiente para {$producto->nombre_producto}. Disponible: {$producto->stock_disponible}, Solicitado: {$item['cantidad']}",
-                        400
-                    );
-                }
-            }
-
             // Calcular totales
             $subtotal = 0;
-            foreach ($request->items as $item) {
-                $subtotal += $item['precio_unitario'] * $item['cantidad'];
+            foreach ($carrito->detalles as $detalle) {
+                $subtotal += $detalle->cantidad * $detalle->precio_unitario;
             }
-
-            $descuento = $request->descuento ?? 0;
-            $total = $subtotal - $descuento;
 
             // Crear venta
-            $venta = Venta::create([
-                'cliente_id' => $request->cliente_id,
-                'fecha_venta' => now(),
-                'estado_venta' => $request->canal_venta === 'Tienda física' ? 'Completado' : 'Pendiente',
-                'total_venta' => $total,
-                'metodo_pago' => $request->metodo_pago,
-                'canal_venta' => $request->canal_venta ?? 'Web',
-                'direccion_envio' => $request->direccion_envio,
-                'telefono_contacto' => $request->telefono_contacto,
-                'observaciones' => $request->observaciones,
-            ]);
-
-            // Crear detalles de venta
-            foreach ($request->items as $item) {
-                DetalleVenta::create([
-                    'venta_id' => $venta->venta_id,
-                    'producto_id' => $item['producto_id'],
-                    'cantidad' => $item['cantidad'],
-                    'precio_unitario' => $item['precio_unitario'],
-                    'subtotal' => $item['precio_unitario'] * $item['cantidad'],
-                ]);
-
-                // Si es venta física, descontar stock inmediatamente
-                if ($request->canal_venta === 'Tienda física') {
-                    $producto = Producto::find($item['producto_id']);
-                    $producto->stock_disponible -= $item['cantidad'];
-                    $producto->save();
-                }
+            $venta = new Venta();
+            $venta->cliente_id = $cliente->cliente_id;
+            $venta->user_id = $user->id;
+            $venta->subtotal = $subtotal;
+            $venta->descuento = 0;
+            $venta->total_venta = $subtotal;
+            $venta->metodo_pago = $request->metodo_pago;
+            $venta->estado_venta = 'Pendiente';
+            $venta->canal_venta = 'Web';
+            $venta->direccion_envio = $request->direccion_envio;
+            $venta->telefono_contacto = $request->telefono_contacto;
+            $venta->observaciones = $request->observaciones;
+            
+            // ⭐ GUARDAR COMPROBANTE SI VIENE
+            if ($request->filled('comprobante_pago')) {
+                $venta->comprobante_pago = $request->comprobante_pago;
             }
+            
+            if ($request->filled('codigo_operacion')) {
+                $venta->codigo_operacion = $request->codigo_operacion;
+            }
+
+            $venta->save();
+
+            // Generar número de venta
+            $venta->numero_venta = 'V-' . str_pad($venta->venta_id, 6, '0', STR_PAD_LEFT);
+            $venta->save();
+
+            // Crear detalles de venta desde el carrito
+            foreach ($carrito->detalles as $detalleCarrito) {
+                $detalleVenta = new DetalleVenta();
+                $detalleVenta->venta_id = $venta->venta_id;
+                $detalleVenta->producto_id = $detalleCarrito->producto_id;
+                $detalleVenta->cantidad = $detalleCarrito->cantidad;
+                $detalleVenta->precio_unitario = $detalleCarrito->precio_unitario;
+                $detalleVenta->subtotal = $detalleCarrito->cantidad * $detalleCarrito->precio_unitario;
+                $detalleVenta->save();
+
+                // ⚠️ NO descontar stock aquí - solo al confirmar
+            }
+
+            // Vaciar carrito
+            $carrito->detalles()->delete();
 
             DB::commit();
 
-            $venta->load(['cliente', 'detalles.producto']);
+            Log::info('✅ Venta creada con comprobante:', [
+                'venta_id' => $venta->venta_id,
+                'cliente_id' => $cliente->cliente_id,
+                'total' => $venta->total_venta,
+                'comprobante' => $venta->comprobante_pago ? 'Sí' : 'No',
+                'codigo_operacion' => $venta->codigo_operacion
+            ]);
 
-            return $this->createdResponse(
-                $this->mapearVenta($venta),
-                'Venta registrada exitosamente'
-            );
+            return response()->json([
+                'success' => true,
+                'message' => 'Venta creada exitosamente',
+                'data' => [
+                    'venta_id' => $venta->venta_id,
+                    'numero_venta' => $venta->numero_venta,
+                    'total' => $venta->total_venta,
+                    'estado' => $venta->estado_venta,
+                    'comprobante_pago' => $venta->comprobante_pago,
+                    'codigo_operacion' => $venta->codigo_operacion
+                ]
+            ], 201);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Error al registrar venta: " . $e->getMessage());
-            return $this->errorResponse('Error al registrar venta: ' . $e->getMessage(), 500);
+            throw $e;
         }
-    }
 
+    } catch (\Exception $e) {
+        Log::error('Error al crear venta: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al crear la venta: ' . $e->getMessage()
+        ], 500);
+    }
+}
     /**
      * Validar transiciones de estado
      */
