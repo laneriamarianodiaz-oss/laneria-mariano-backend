@@ -49,6 +49,9 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     Route::get('/pedidos/{id}', [VentaController::class, 'show']);
     Route::post('/pedidos/{id}/cancelar', [VentaController::class, 'cancelar']);
     
+    // ⭐ NUEVO: Subir comprobante desde PEDIDOS (alias)
+    Route::post('/pedidos/{id}/comprobante', [VentaController::class, 'subirComprobante']);
+    
     // ===================================
     // 🛒 CARRITO DE COMPRAS
     // ===================================
@@ -71,6 +74,12 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     
     // 📸 SUBIR COMPROBANTE (Cliente puede subir después de hacer pedido)
     Route::post('/ventas/{id}/comprobante', [VentaController::class, 'subirComprobante']);
+    
+    // ⭐ NUEVO: Rutas admin para pedidos (para punto de venta)
+    Route::middleware(['role:administrador,vendedor'])->group(function () {
+        Route::get('/admin/pedidos', [VentaController::class, 'listarPedidos']);
+        Route::put('/admin/pedidos/{id}/estado', [VentaController::class, 'actualizarEstado']);
+    });
     
     // ===================================
     // 📦 PRODUCTOS (Admin y Vendedor)
