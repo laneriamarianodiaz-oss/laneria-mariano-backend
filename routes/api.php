@@ -79,19 +79,15 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     Route::post('/ventas/{id}/comprobante', [VentaController::class, 'subirComprobante']);
     
     // ===================================
-    // 📦 PRODUCTOS (Admin y Vendedor)
+    // 📦 PRODUCTOS (TEMPORAL SIN MIDDLEWARE)
     // ===================================
-    Route::middleware(['role:administrador,vendedor'])->group(function () {
-        Route::post('/productos/subir-imagen', [ProductoController::class, 'subirImagen']);
-        Route::post('/productos/imagen', [ProductoController::class, 'subirImagen']); // ✅ Alias
-        Route::post('/productos', [ProductoController::class, 'store']);
-        Route::put('/productos/{id}', [ProductoController::class, 'update']);
-        Route::post('/productos/{id}', [ProductoController::class, 'update']);
-    });
-    
-    Route::middleware(['role:administrador'])->group(function () {
-        Route::delete('/productos/{id}', [ProductoController::class, 'destroy']);
-    });
+    // ⚠️ TEMPORAL: Quitamos middleware de roles para probar
+    Route::post('/productos/subir-imagen', [ProductoController::class, 'subirImagen']);
+    Route::post('/productos/imagen', [ProductoController::class, 'subirImagen']); // ✅ Alias
+    Route::post('/productos', [ProductoController::class, 'store']);
+    Route::put('/productos/{id}', [ProductoController::class, 'update']);
+    Route::post('/productos/{id}', [ProductoController::class, 'update']);
+    Route::delete('/productos/{id}', [ProductoController::class, 'destroy']);
     
     // ===================================
     // 📊 INVENTARIO (Admin y Vendedor)
