@@ -77,6 +77,7 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     // ===================================
     Route::middleware(['role:administrador,vendedor'])->group(function () {
         Route::post('/productos/subir-imagen', [ProductoController::class, 'subirImagen']);
+        Route::post('/productos/imagen', [ProductoController::class, 'subirImagen']); // ✅ Alias
         Route::post('/productos', [ProductoController::class, 'store']);
         Route::put('/productos/{id}', [ProductoController::class, 'update']);
         Route::post('/productos/{id}', [ProductoController::class, 'update']);
