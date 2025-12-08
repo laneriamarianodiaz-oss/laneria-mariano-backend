@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\InventarioController;
 use App\Http\Controllers\Api\VentaController;
 use App\Http\Controllers\Api\ClienteController;
 use App\Http\Controllers\Api\CarritoController;
+use App\Http\Controllers\Api\TestController;
 
 // ============================================
 // 🔐 AUTENTICACIÓN (PÚBLICAS)
@@ -15,6 +16,11 @@ Route::prefix('v1/auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
 });
+
+// ============================================
+// 🧪 PRUEBAS (TEMPORAL)
+// ============================================
+Route::get('v1/test-cloudinary', [TestController::class, 'testCloudinary']);
 
 // ============================================
 // 📦 RUTAS PÚBLICAS
