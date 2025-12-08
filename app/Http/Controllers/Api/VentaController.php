@@ -8,10 +8,12 @@ use App\Models\Cliente;
 use App\Models\Producto;
 use App\Models\Inventario;
 use App\Models\Comprobante;
+use App\Models\Carrito;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
 class VentaController extends BaseController
@@ -94,7 +96,7 @@ class VentaController extends BaseController
         // Ordenar por más recientes
         $ventas = $query->orderBy('fecha_venta', 'desc')->get();
 
-        \Log::info('📦 Ventas encontradas:', [
+        Log::info('📦 Ventas encontradas:', [
             'cantidad' => $ventas->count(),
             'primera_venta_id' => $ventas->first()?->venta_id,
             'tiene_cliente' => $ventas->first()?->cliente ? 'SÍ' : 'NO',
@@ -246,58 +248,79 @@ class VentaController extends BaseController
     }
 
     /**
-     * 📸 SUBIR COMPROBANTE DE PAGO A CLOUDINARY
+     * ⭐ GUARDAR URL DE COMPROBANTE (CORREGIDO PARA CLOUDINARY)
      */
-     /**
- * ⭐ GUARDAR URL DE COMPROBANTE (NO PROCESAR ARCHIVO)
- */
-public function subirComprobante(Request $request, $id)
-{
-    $validator = Validator::make($request->all(), [
-        'comprobante_pago' => 'required|string|max:500', // URL de Cloudinary
-        'codigo_operacion' => 'nullable|string|max:50'
-    ]);
+    public function subirComprobante(Request $request, $id)
+    {
+        $validator = Validator::make($request->all(), [
+            'comprobante_pago' => 'required|string|max:1000', // Aumentado para URLs largas
+            'codigo_operacion' => 'nullable|string|max:50'
+        ]);
 
-    if ($validator->fails()) {
-        return response()->json([
-            'success' => false,
-            'errors' => $validator->errors()
-        ], 422);
-    }
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
 
-    $venta = Venta::find($id);
-    
-    if (!$venta) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Venta no encontrada'
-        ], 404);
-    }
+        $venta = Venta::find($id);
+        
+        if (!$venta) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Venta no encontrada'
+            ], 404);
+        }
 
-    // ⭐ GUARDAR URL DIRECTAMENTE (SIN PROCESAR ARCHIVO)
-    $venta->comprobante_pago = $request->comprobante_pago;
-    
-    if ($request->filled('codigo_operacion')) {
-        $venta->codigo_operacion = $request->codigo_operacion;
-    }
-    
-    $venta->save();
-
-    Log::info('✅ Comprobante guardado:', [
-        'venta_id' => $venta->venta_id,
-        'comprobante_url' => $venta->comprobante_pago
-    ]);
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Comprobante guardado exitosamente',
-        'data' => [
+        // ⭐ LIMPIAR Y VALIDAR URL DE CLOUDINARY
+        $comprobanteUrl = $request->comprobante_pago;
+        
+        Log::info('📸 Actualizando comprobante:', [
             'venta_id' => $venta->venta_id,
-            'comprobante_pago' => $venta->comprobante_pago,
+            'url_recibida' => $comprobanteUrl
+        ]);
+        
+        // Asegurarse de que tenga el protocolo correcto
+        if (!str_starts_with($comprobanteUrl, 'http://') && 
+            !str_starts_with($comprobanteUrl, 'https://')) {
+            $comprobanteUrl = 'https://' . $comprobanteUrl;
+            Log::info('⚠️ Se agregó https:// al comprobante');
+        }
+        
+        // Validar que sea una URL de Cloudinary válida
+        if (!str_contains($comprobanteUrl, 'cloudinary.com')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'La URL debe ser de Cloudinary'
+            ], 400);
+        }
+
+        // Guardar URL limpia
+        $venta->comprobante_pago = $comprobanteUrl;
+        
+        if ($request->filled('codigo_operacion')) {
+            $venta->codigo_operacion = $request->codigo_operacion;
+        }
+        
+        $venta->save();
+
+        Log::info('✅ Comprobante actualizado:', [
+            'venta_id' => $venta->venta_id,
+            'comprobante_guardado' => $venta->comprobante_pago,
             'codigo_operacion' => $venta->codigo_operacion
-        ]
-    ]);
-}
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Comprobante guardado exitosamente',
+            'data' => [
+                'venta_id' => $venta->venta_id,
+                'comprobante_pago' => $venta->comprobante_pago,
+                'codigo_operacion' => $venta->codigo_operacion
+            ]
+        ]);
+    }
 
     /**
      * CANCELAR PEDIDO (CLIENTE o ADMIN)
@@ -361,138 +384,174 @@ public function subirComprobante(Request $request, $id)
     }
 
     /**
-     * Registrar nueva venta (POS / Carrito)
+     * ⭐ REGISTRAR NUEVA VENTA (CORREGIDO PARA CLOUDINARY)
      */
     public function store(Request $request)
-{
-    try {
-        $validator = Validator::make($request->all(), [
-            'metodo_pago' => 'required|string',
-            'direccion_envio' => 'nullable|string|max:255',
-            'telefono_contacto' => 'nullable|string|max:20',
-            'observaciones' => 'nullable|string',
-            // ⭐ AGREGAR VALIDACIÓN DE COMPROBANTE
-            'comprobante_pago' => 'nullable|string|max:500',  // URL de Cloudinary
-            'codigo_operacion' => 'nullable|string|max:50'
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        $user = Auth::user();
-        $cliente = $user->cliente;
-
-        if (!$cliente) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Usuario no tiene perfil de cliente asociado'
-            ], 403);
-        }
-
-        // Obtener carrito del usuario
-        $carrito = Carrito::where('cliente_id', $cliente->cliente_id)->first();
-
-        if (!$carrito || $carrito->detalles->isEmpty()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'El carrito está vacío'
-            ], 400);
-        }
-
-        DB::beginTransaction();
-
+    {
         try {
-            // Calcular totales
-            $subtotal = 0;
-            foreach ($carrito->detalles as $detalle) {
-                $subtotal += $detalle->cantidad * $detalle->precio_unitario;
-            }
-
-            // Crear venta
-            $venta = new Venta();
-            $venta->cliente_id = $cliente->cliente_id;
-            $venta->user_id = $user->id;
-            $venta->subtotal = $subtotal;
-            $venta->descuento = 0;
-            $venta->total_venta = $subtotal;
-            $venta->metodo_pago = $request->metodo_pago;
-            $venta->estado_venta = 'Pendiente';
-            $venta->canal_venta = 'Web';
-            $venta->direccion_envio = $request->direccion_envio;
-            $venta->telefono_contacto = $request->telefono_contacto;
-            $venta->observaciones = $request->observaciones;
-            
-            // ⭐ GUARDAR COMPROBANTE SI VIENE
-            if ($request->filled('comprobante_pago')) {
-                $venta->comprobante_pago = $request->comprobante_pago;
-            }
-            
-            if ($request->filled('codigo_operacion')) {
-                $venta->codigo_operacion = $request->codigo_operacion;
-            }
-
-            $venta->save();
-
-            // Generar número de venta
-            $venta->numero_venta = 'V-' . str_pad($venta->venta_id, 6, '0', STR_PAD_LEFT);
-            $venta->save();
-
-            // Crear detalles de venta desde el carrito
-            foreach ($carrito->detalles as $detalleCarrito) {
-                $detalleVenta = new DetalleVenta();
-                $detalleVenta->venta_id = $venta->venta_id;
-                $detalleVenta->producto_id = $detalleCarrito->producto_id;
-                $detalleVenta->cantidad = $detalleCarrito->cantidad;
-                $detalleVenta->precio_unitario = $detalleCarrito->precio_unitario;
-                $detalleVenta->subtotal = $detalleCarrito->cantidad * $detalleCarrito->precio_unitario;
-                $detalleVenta->save();
-
-                // ⚠️ NO descontar stock aquí - solo al confirmar
-            }
-
-            // Vaciar carrito
-            $carrito->detalles()->delete();
-
-            DB::commit();
-
-            Log::info('✅ Venta creada con comprobante:', [
-                'venta_id' => $venta->venta_id,
-                'cliente_id' => $cliente->cliente_id,
-                'total' => $venta->total_venta,
-                'comprobante' => $venta->comprobante_pago ? 'Sí' : 'No',
-                'codigo_operacion' => $venta->codigo_operacion
+            $validator = Validator::make($request->all(), [
+                'metodo_pago' => 'required|string',
+                'direccion_envio' => 'nullable|string|max:255',
+                'telefono_contacto' => 'nullable|string|max:20',
+                'observaciones' => 'nullable|string',
+                'comprobante_pago' => 'nullable|string|max:1000',  // ⭐ Aumentado
+                'codigo_operacion' => 'nullable|string|max:50'
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Venta creada exitosamente',
-                'data' => [
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $user = Auth::user();
+            $cliente = $user->cliente;
+
+            if (!$cliente) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no tiene perfil de cliente asociado'
+                ], 403);
+            }
+
+            // Obtener carrito del usuario
+            $carrito = Carrito::where('cliente_id', $cliente->cliente_id)->first();
+
+            if (!$carrito || $carrito->detalles->isEmpty()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El carrito está vacío'
+                ], 400);
+            }
+
+            DB::beginTransaction();
+
+            try {
+                // Calcular totales
+                $subtotal = 0;
+                foreach ($carrito->detalles as $detalle) {
+                    $subtotal += $detalle->cantidad * $detalle->precio_unitario;
+                }
+
+                // ⭐ LIMPIAR URL DE COMPROBANTE SI VIENE
+                $comprobanteUrl = null;
+                if ($request->filled('comprobante_pago')) {
+                    $comprobanteUrl = $request->comprobante_pago;
+                    
+                    // Log para debug
+                    Log::info('📸 Comprobante recibido (original):', [
+                        'url_original' => $comprobanteUrl,
+                        'longitud' => strlen($comprobanteUrl),
+                        'empieza_con_http' => str_starts_with($comprobanteUrl, 'http'),
+                    ]);
+                    
+                    // Asegurarse de que tenga el protocolo correcto
+                    if (!str_starts_with($comprobanteUrl, 'http://') && 
+                        !str_starts_with($comprobanteUrl, 'https://')) {
+                        $comprobanteUrl = 'https://' . $comprobanteUrl;
+                        Log::info('⚠️ Se agregó https:// al comprobante');
+                    }
+                    
+                    // Validar que sea una URL de Cloudinary
+                    if (!str_contains($comprobanteUrl, 'cloudinary.com')) {
+                        DB::rollBack();
+                        Log::error('❌ URL no es de Cloudinary:', ['url' => $comprobanteUrl]);
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'La URL del comprobante debe ser de Cloudinary'
+                        ], 400);
+                    }
+                    
+                    Log::info('✅ URL de comprobante limpia:', ['url_limpia' => $comprobanteUrl]);
+                }
+
+                // Crear venta
+                $venta = new Venta();
+                $venta->cliente_id = $cliente->cliente_id;
+                $venta->user_id = $user->id;
+                $venta->subtotal = $subtotal;
+                $venta->descuento = 0;
+                $venta->total_venta = $subtotal;
+                $venta->metodo_pago = $request->metodo_pago;
+                $venta->estado_venta = 'Pendiente';
+                $venta->canal_venta = 'Web';
+                $venta->direccion_envio = $request->direccion_envio;
+                $venta->telefono_contacto = $request->telefono_contacto;
+                $venta->observaciones = $request->observaciones;
+                
+                // ⭐ GUARDAR URL LIMPIA DE CLOUDINARY
+                $venta->comprobante_pago = $comprobanteUrl;
+                
+                if ($request->filled('codigo_operacion')) {
+                    $venta->codigo_operacion = $request->codigo_operacion;
+                }
+
+                $venta->save();
+
+                // Generar número de venta
+                $venta->numero_venta = 'V-' . str_pad($venta->venta_id, 6, '0', STR_PAD_LEFT);
+                $venta->save();
+
+                // Crear detalles de venta desde el carrito
+                foreach ($carrito->detalles as $detalleCarrito) {
+                    $detalleVenta = new DetalleVenta();
+                    $detalleVenta->venta_id = $venta->venta_id;
+                    $detalleVenta->producto_id = $detalleCarrito->producto_id;
+                    $detalleVenta->cantidad = $detalleCarrito->cantidad;
+                    $detalleVenta->precio_unitario = $detalleCarrito->precio_unitario;
+                    $detalleVenta->subtotal = $detalleCarrito->cantidad * $detalleCarrito->precio_unitario;
+                    $detalleVenta->save();
+                }
+
+                // Vaciar carrito
+                $carrito->detalles()->delete();
+
+                DB::commit();
+
+                Log::info('✅ Venta creada exitosamente:', [
                     'venta_id' => $venta->venta_id,
-                    'numero_venta' => $venta->numero_venta,
+                    'cliente_id' => $cliente->cliente_id,
                     'total' => $venta->total_venta,
-                    'estado' => $venta->estado_venta,
-                    'comprobante_pago' => $venta->comprobante_pago,
-                    'codigo_operacion' => $venta->codigo_operacion
-                ]
-            ], 201);
+                    'comprobante_url_guardada' => $venta->comprobante_pago,
+                    'codigo_operacion' => $venta->codigo_operacion,
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Venta creada exitosamente',
+                    'data' => [
+                        'venta_id' => $venta->venta_id,
+                        'numero_venta' => $venta->numero_venta,
+                        'total' => $venta->total_venta,
+                        'estado' => $venta->estado_venta,
+                        'comprobante_pago' => $venta->comprobante_pago,
+                        'codigo_operacion' => $venta->codigo_operacion
+                    ]
+                ], 201);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error('❌ Error en transacción de venta:', [
+                    'mensaje' => $e->getMessage(),
+                    'linea' => $e->getLine(),
+                    'archivo' => $e->getFile()
+                ]);
+                throw $e;
+            }
 
         } catch (\Exception $e) {
-            DB::rollBack();
-            throw $e;
+            Log::error('❌ Error al crear venta:', [
+                'mensaje' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al crear la venta: ' . $e->getMessage()
+            ], 500);
         }
-
-    } catch (\Exception $e) {
-        Log::error('Error al crear venta: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'message' => 'Error al crear la venta: ' . $e->getMessage()
-        ], 500);
     }
-}
+
     /**
      * Validar transiciones de estado
      */
@@ -516,7 +575,7 @@ public function subirComprobante(Request $request, $id)
     }
 
     /**
-     * ⭐ MAPEAR VENTA - VERSIÓN CORREGIDA Y COMPLETA
+     * ⭐ MAPEAR VENTA - VERSIÓN COMPLETA
      */
     private function mapearVenta($venta)
     {
@@ -527,15 +586,6 @@ public function subirComprobante(Request $request, $id)
         if (!$venta->relationLoaded('detalles')) {
             $venta->load('detalles.producto');
         }
-
-        Log::info('🔍 MAPEAR VENTA DEBUG:', [
-            'venta_id' => $venta->venta_id,
-            'tiene_cliente' => $venta->cliente ? 'SÍ' : 'NO',
-            'cliente_nombre' => $venta->cliente->nombre_cliente ?? 'NULL',
-            'cliente_email' => $venta->cliente->email ?? 'NULL',
-            'cantidad_detalles' => $venta->detalles->count(),
-            'detalles_ids' => $venta->detalles->pluck('detalle_venta_id')->toArray(),
-        ]);
 
         return [
             'venta_id' => $venta->venta_id,
