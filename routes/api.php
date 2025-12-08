@@ -21,21 +21,13 @@ Route::prefix('v1/auth')->group(function () {
 // ============================================
 Route::prefix('v1')->group(function () {
     
-    // ✅ PRODUCTOS PÚBLICOS
+    // ✅ PRODUCTOS PÚBLICOS (incluye /admin SIN middleware)
     Route::get('/productos/admin', [ProductoController::class, 'indexAdmin']);
     Route::get('/productos', [ProductoController::class, 'index']);
     Route::get('/productos/{id}', [ProductoController::class, 'show']);
     Route::get('/productos/tipo/{tipo}', [ProductoController::class, 'porTipo']);
     Route::get('/productos-tipos', [ProductoController::class, 'tipos']);
     Route::get('/productos-colores', [ProductoController::class, 'colores']);
-    
-    // ⚠️ TEMPORAL: PRODUCTOS SIN AUTENTICACIÓN PARA PROBAR CLOUDINARY
-    Route::post('/productos/subir-imagen', [ProductoController::class, 'subirImagen']);
-    Route::post('/productos/imagen', [ProductoController::class, 'subirImagen']);
-    Route::post('/productos', [ProductoController::class, 'store']);
-    Route::put('/productos/{id}', [ProductoController::class, 'update']);
-    Route::post('/productos/{id}', [ProductoController::class, 'update']);
-    Route::delete('/productos/{id}', [ProductoController::class, 'destroy']);
 });
 
 // ============================================
@@ -76,7 +68,22 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     Route::get('/ventas/{id}', [VentaController::class, 'show']);
     Route::put('/ventas/{id}/estado', [VentaController::class, 'actualizarEstado']);
     Route::get('/mis-ventas', [VentaController::class, 'misVentas']);
+    
+    // 📸 SUBIR COMPROBANTE (Cliente puede subir después de hacer pedido)
     Route::post('/ventas/{id}/comprobante', [VentaController::class, 'subirComprobante']);
+    
+    // ===================================
+    // 📦 PRODUCTOS (Admin y Vendedor)
+    // ===================================
+    Route::middleware(['role:administrador,vendedor'])->group(function () {
+        Route::post('/productos', [ProductoController::class, 'store']);
+        Route::put('/productos/{id}', [ProductoController::class, 'update']);
+        Route::post('/productos/{id}', [ProductoController::class, 'update']);
+    });
+    
+    Route::middleware(['role:administrador'])->group(function () {
+        Route::delete('/productos/{id}', [ProductoController::class, 'destroy']);
+    });
     
     // ===================================
     // 📊 INVENTARIO (Admin y Vendedor)

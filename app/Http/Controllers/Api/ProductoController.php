@@ -8,7 +8,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
 class ProductoController extends BaseController
 {
@@ -134,72 +133,6 @@ class ProductoController extends BaseController
     }
 
     /**
-     * 📸 Subir imagen a Cloudinary
-     */
-    public function subirImagen(Request $request)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'imagen' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120' // 5MB
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            if ($request->hasFile('imagen')) {
-                $imagen = $request->file('imagen');
-                
-                // ✅ SUBIR A CLOUDINARY
-                $uploadedFile = Cloudinary::upload(
-                    $imagen->getRealPath(),
-                    [
-                        'folder' => 'laneria-mariano/productos',
-                        'transformation' => [
-                            'width' => 800,
-                            'height' => 800,
-                            'crop' => 'limit',
-                            'quality' => 'auto'
-                        ]
-                    ]
-                );
-
-                $url = $uploadedFile->getSecurePath();
-                $publicId = $uploadedFile->getPublicId();
-
-                \Log::info('✅ Imagen subida a Cloudinary:', [
-                    'url' => $url,
-                    'public_id' => $publicId
-                ]);
-
-                return response()->json([
-                    'success' => true,
-                    'data' => [
-                        'imagen_url' => $url,
-                        'public_id' => $publicId
-                    ]
-                ]);
-            }
-
-            return response()->json([
-                'success' => false,
-                'message' => 'No se recibió ninguna imagen'
-            ], 400);
-
-        } catch (\Exception $e) {
-            \Log::error('❌ Error al subir imagen: ' . $e->getMessage());
-            \Log::error('Stack: ' . $e->getTraceAsString());
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al subir imagen: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
      * Obtener un producto por ID
      */
     public function show($id)
@@ -214,11 +147,13 @@ class ProductoController extends BaseController
     }
 
     /**
-     * Crear nuevo producto CON CLOUDINARY
+     * ✅ CREAR PRODUCTO - RECIBE JSON CON imagen_url DE CLOUDINARY
      */
     public function store(Request $request)
     {
         try {
+            Log::info('📦 Datos recibidos para crear producto:', $request->all());
+
             $validator = Validator::make($request->all(), [
                 'codigo_producto' => 'required|string|max:50|unique:productos,codigo_producto',
                 'nombre_producto' => 'required|string|max:100',
@@ -232,10 +167,11 @@ class ProductoController extends BaseController
                 'descripcion' => 'nullable|string',
                 'proveedor_id' => 'nullable|exists:proveedores,proveedor_id',
                 'estado_producto' => 'nullable|in:Activo,Inactivo',
-                'imagen' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+                'imagen_url' => 'nullable|string|max:500', // ⭐ URL de Cloudinary
             ]);
 
             if ($validator->fails()) {
+                Log::error('❌ Validación fallida:', $validator->errors()->toArray());
                 return response()->json([
                     'success' => false,
                     'errors' => $validator->errors()
@@ -244,30 +180,7 @@ class ProductoController extends BaseController
 
             DB::beginTransaction();
             try {
-                // ✅ SUBIR IMAGEN A CLOUDINARY SI EXISTE
-                $imagenUrl = null;
-                if ($request->hasFile('imagen')) {
-                    $imagen = $request->file('imagen');
-                    
-                    $uploadedFile = Cloudinary::upload(
-                        $imagen->getRealPath(),
-                        [
-                            'folder' => 'laneria-mariano/productos',
-                            'transformation' => [
-                                'width' => 800,
-                                'height' => 800,
-                                'crop' => 'limit',
-                                'quality' => 'auto'
-                            ]
-                        ]
-                    );
-
-                    $imagenUrl = $uploadedFile->getSecurePath();
-                    
-                    Log::info('✅ Imagen subida a Cloudinary:', ['url' => $imagenUrl]);
-                }
-
-                // Crear producto
+                // Crear producto con la URL de Cloudinary
                 $producto = Producto::create([
                     'codigo_producto' => $request->codigo_producto,
                     'nombre_producto' => $request->nombre_producto,
@@ -279,12 +192,17 @@ class ProductoController extends BaseController
                     'stock_disponible' => $request->stock_disponible,
                     'stock_minimo' => $request->stock_minimo ?? 0,
                     'descripcion' => $request->descripcion,
-                    'imagen_url' => $imagenUrl,
+                    'imagen_url' => $request->imagen_url, // ⭐ URL DE CLOUDINARY
                     'proveedor_id' => $request->proveedor_id,
                     'estado_producto' => $request->estado_producto ?? 'Activo',
                 ]);
 
                 DB::commit();
+
+                Log::info('✅ Producto creado:', [
+                    'id' => $producto->producto_id,
+                    'imagen_url' => $producto->imagen_url
+                ]);
 
                 return response()->json([
                     'success' => true,
@@ -313,7 +231,7 @@ class ProductoController extends BaseController
     }
 
     /**
-     * Actualizar producto CON CLOUDINARY
+     * ✅ ACTUALIZAR PRODUCTO - RECIBE JSON CON imagen_url
      */
     public function update(Request $request, $id)
     {
@@ -322,6 +240,8 @@ class ProductoController extends BaseController
         if (!$producto) {
             return $this->notFoundResponse('Producto no encontrado');
         }
+
+        Log::info('📦 Datos recibidos para actualizar producto:', $request->all());
 
         $validator = Validator::make($request->all(), [
             'codigo_producto' => 'string|max:50|unique:productos,codigo_producto,' . $id . ',producto_id',
@@ -336,7 +256,7 @@ class ProductoController extends BaseController
             'descripcion' => 'nullable|string',
             'proveedor_id' => 'nullable|exists:proveedores,proveedor_id',
             'estado_producto' => 'in:Activo,Inactivo',
-            'imagen' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120'
+            'imagen_url' => 'nullable|string|max:500' // ⭐ URL de Cloudinary
         ]);
 
         if ($validator->fails()) {
@@ -345,28 +265,6 @@ class ProductoController extends BaseController
 
         DB::beginTransaction();
         try {
-            // ✅ SI VIENE NUEVA IMAGEN, SUBIR A CLOUDINARY
-            if ($request->hasFile('imagen')) {
-                $imagen = $request->file('imagen');
-                
-                $uploadedFile = Cloudinary::upload(
-                    $imagen->getRealPath(),
-                    [
-                        'folder' => 'laneria-mariano/productos',
-                        'transformation' => [
-                            'width' => 800,
-                            'height' => 800,
-                            'crop' => 'limit',
-                            'quality' => 'auto'
-                        ]
-                    ]
-                );
-
-                $request->merge(['imagen_url' => $uploadedFile->getSecurePath()]);
-                
-                Log::info('✅ Imagen actualizada en Cloudinary:', ['url' => $uploadedFile->getSecurePath()]);
-            }
-
             $producto->update($request->only([
                 'codigo_producto', 
                 'nombre_producto',
@@ -378,13 +276,15 @@ class ProductoController extends BaseController
                 'stock_disponible',
                 'stock_minimo',
                 'descripcion',
-                'imagen_url',
+                'imagen_url', // ⭐ URL DE CLOUDINARY
                 'proveedor_id',
                 'estado_producto',
             ]));
 
             DB::commit();
             $producto->load(['proveedor', 'inventario']);
+
+            Log::info('✅ Producto actualizado:', ['id' => $producto->producto_id]);
 
             return $this->successResponse($this->mapearProducto($producto), 'Producto actualizado exitosamente');
 
