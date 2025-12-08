@@ -7,7 +7,6 @@ use App\Http\Controllers\Api\InventarioController;
 use App\Http\Controllers\Api\VentaController;
 use App\Http\Controllers\Api\ClienteController;
 use App\Http\Controllers\Api\CarritoController;
-use App\Http\Controllers\Api\TestController;
 
 // ============================================
 // 🔐 AUTENTICACIÓN (PÚBLICAS)
@@ -18,22 +17,25 @@ Route::prefix('v1/auth')->group(function () {
 });
 
 // ============================================
-// 🧪 PRUEBAS (TEMPORAL)
-// ============================================
-Route::get('v1/test-cloudinary', [TestController::class, 'testCloudinary']);
-
-// ============================================
 // 📦 RUTAS PÚBLICAS
 // ============================================
 Route::prefix('v1')->group(function () {
     
-    // ✅ PRODUCTOS PÚBLICOS (incluye /admin SIN middleware)
+    // ✅ PRODUCTOS PÚBLICOS
     Route::get('/productos/admin', [ProductoController::class, 'indexAdmin']);
     Route::get('/productos', [ProductoController::class, 'index']);
     Route::get('/productos/{id}', [ProductoController::class, 'show']);
     Route::get('/productos/tipo/{tipo}', [ProductoController::class, 'porTipo']);
     Route::get('/productos-tipos', [ProductoController::class, 'tipos']);
     Route::get('/productos-colores', [ProductoController::class, 'colores']);
+    
+    // ⚠️ TEMPORAL: PRODUCTOS SIN AUTENTICACIÓN PARA PROBAR CLOUDINARY
+    Route::post('/productos/subir-imagen', [ProductoController::class, 'subirImagen']);
+    Route::post('/productos/imagen', [ProductoController::class, 'subirImagen']);
+    Route::post('/productos', [ProductoController::class, 'store']);
+    Route::put('/productos/{id}', [ProductoController::class, 'update']);
+    Route::post('/productos/{id}', [ProductoController::class, 'update']);
+    Route::delete('/productos/{id}', [ProductoController::class, 'destroy']);
 });
 
 // ============================================
@@ -74,20 +76,7 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     Route::get('/ventas/{id}', [VentaController::class, 'show']);
     Route::put('/ventas/{id}/estado', [VentaController::class, 'actualizarEstado']);
     Route::get('/mis-ventas', [VentaController::class, 'misVentas']);
-    
-    // 📸 SUBIR COMPROBANTE (Cliente puede subir después de hacer pedido)
     Route::post('/ventas/{id}/comprobante', [VentaController::class, 'subirComprobante']);
-    
-    // ===================================
-    // 📦 PRODUCTOS (TEMPORAL SIN MIDDLEWARE)
-    // ===================================
-    // ⚠️ TEMPORAL: Quitamos middleware de roles para probar
-    Route::post('/productos/subir-imagen', [ProductoController::class, 'subirImagen']);
-    Route::post('/productos/imagen', [ProductoController::class, 'subirImagen']); // ✅ Alias
-    Route::post('/productos', [ProductoController::class, 'store']);
-    Route::put('/productos/{id}', [ProductoController::class, 'update']);
-    Route::post('/productos/{id}', [ProductoController::class, 'update']);
-    Route::delete('/productos/{id}', [ProductoController::class, 'destroy']);
     
     // ===================================
     // 📊 INVENTARIO (Admin y Vendedor)
