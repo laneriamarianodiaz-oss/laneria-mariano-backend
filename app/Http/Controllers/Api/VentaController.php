@@ -248,15 +248,21 @@ class VentaController extends BaseController
     /**
      * 📸 SUBIR COMPROBANTE DE PAGO A CLOUDINARY
      */
-    public function subirComprobante(Request $request, $id)
+     public function subirComprobante(Request $request, $id)
     {
         try {
+            Log::info('📥 Recibiendo comprobante (URL):', [
+                'venta_id' => $id,
+                'data' => $request->all()
+            ]);
+
             $validator = Validator::make($request->all(), [
-                'comprobante' => 'required|image|mimes:jpeg,png,jpg,gif,webp,pdf|max:10240', // 10MB
+                'comprobante_pago' => 'required|string|max:500', // ⭐ URL de Cloudinary
                 'codigo_operacion' => 'nullable|string|max:50'
             ]);
 
             if ($validator->fails()) {
+                Log::error('❌ Validación fallida:', $validator->errors()->toArray());
                 return response()->json([
                     'success' => false,
                     'errors' => $validator->errors()
@@ -269,61 +275,40 @@ class VentaController extends BaseController
                 return $this->notFoundResponse('Venta no encontrada');
             }
 
-            if ($request->hasFile('comprobante')) {
-                $comprobante = $request->file('comprobante');
-                
-                // ✅ SUBIR A CLOUDINARY
-                $uploadedFile = Cloudinary::upload(
-                    $comprobante->getRealPath(),
-                    [
-                        'folder' => 'laneria-mariano/comprobantes',
-                        'resource_type' => 'auto', // Acepta imágenes y PDFs
-                        'transformation' => [
-                            'width' => 1200,
-                            'height' => 1600,
-                            'crop' => 'limit',
-                            'quality' => 'auto'
-                        ]
-                    ]
-                );
-
-                $url = $uploadedFile->getSecurePath();
-                $publicId = $uploadedFile->getPublicId();
-
-                // Actualizar venta con comprobante
-                $venta->comprobante_pago = $url;
-                if ($request->filled('codigo_operacion')) {
-                    $venta->codigo_operacion = $request->codigo_operacion;
-                }
-                $venta->save();
-
-                Log::info('✅ Comprobante subido a Cloudinary:', [
-                    'venta_id' => $venta->venta_id,
-                    'url' => $url,
-                    'public_id' => $publicId
-                ]);
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Comprobante subido exitosamente',
-                    'data' => [
-                        'comprobante_url' => $url,
-                        'public_id' => $publicId,
-                        'venta' => $this->mapearVenta($venta)
-                    ]
-                ]);
+            // ⭐ GUARDAR URL (Angular ya subió a Cloudinary)
+            $venta->comprobante_pago = $request->comprobante_pago;
+            
+            if ($request->filled('codigo_operacion')) {
+                $venta->codigo_operacion = $request->codigo_operacion;
             }
 
+            $venta->save();
+
+            Log::info('✅ Comprobante guardado:', [
+                'venta_id' => $venta->venta_id,
+                'comprobante_url' => $venta->comprobante_pago,
+                'codigo_operacion' => $venta->codigo_operacion
+            ]);
+
             return response()->json([
-                'success' => false,
-                'message' => 'No se recibió ningún comprobante'
-            ], 400);
+                'success' => true,
+                'message' => 'Comprobante guardado exitosamente',
+                'data' => [
+                    'venta_id' => $venta->venta_id,
+                    'comprobante_pago' => $venta->comprobante_pago,
+                    'codigo_operacion' => $venta->codigo_operacion
+                ]
+            ]);
 
         } catch (\Exception $e) {
-            Log::error('❌ Error al subir comprobante: ' . $e->getMessage());
+            Log::error('❌ Error al guardar comprobante:', [
+                'mensaje' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return response()->json([
                 'success' => false,
-                'message' => 'Error al subir comprobante: ' . $e->getMessage()
+                'message' => 'Error al guardar comprobante: ' . $e->getMessage()
             ], 500);
         }
     }
