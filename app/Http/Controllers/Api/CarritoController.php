@@ -6,12 +6,13 @@ use App\Models\Carrito;
 use App\Models\DetalleCarrito;
 use App\Models\Producto;
 use App\Models\Cliente;
-use App\Models\Venta;           // ← AGREGAR
-use App\Models\DetalleVenta;    // ← AGREGAR
-use App\Models\Inventario;      // ← AGREGAR
+use App\Models\Venta;
+use App\Models\DetalleVenta;
+use App\Models\Inventario;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class CarritoController extends BaseController
 {
@@ -229,130 +230,135 @@ class CarritoController extends BaseController
     }
 
     /**
- * Crear venta desde el carrito activo del usuario
- */
-public function crearVentaDesdeCarrito(Request $request)
-{
-    $validator = Validator::make($request->all(), [
-        'metodo_pago' => 'required|in:Efectivo,Transferencia,Yape,Plin',
-        'observaciones' => 'nullable|string',
-        'direccion_envio' => 'nullable|string|max:255',
-        'telefono_contacto' => 'nullable|string|max:20',
-        'codigo_operacion' => 'nullable|string|max:50',
-        'comprobante_pago' => 'nullable|string', // Base64
-    ]);
-
-    if ($validator->fails()) {
-        return $this->validationErrorResponse($validator->errors());
-    }
-
-    $cliente = $request->user()->cliente;
-
-    if (!$cliente) {
-        return $this->errorResponse('Usuario no tiene perfil de cliente', 404);
-    }
-
-    $carrito = Carrito::where('cliente_id', $cliente->cliente_id)
-        ->where('estado', 'Activo')
-        ->with('detalles.producto')
-        ->first();
-
-    if (!$carrito || $carrito->detalles->isEmpty()) {
-        return $this->errorResponse('El carrito está vacío', 400);
-    }
-
-    DB::beginTransaction();
-    try {
-        // Verificar stock
-        foreach ($carrito->detalles as $detalle) {
-            if ($detalle->producto->stock_disponible < $detalle->cantidad) {
-                return $this->errorResponse(
-                    "Stock insuficiente para {$detalle->producto->nombre_producto}",
-                    400
-                );
-            }
-        }
-
-        // Calcular total
-        $total = $carrito->detalles->sum(function ($detalle) {
-            return $detalle->precio_unitario * $detalle->cantidad;
-        });
-
-        // Guardar imagen del comprobante si existe
-        $rutaComprobante = null;
-        if ($request->filled('comprobante_pago')) {
-            $rutaComprobante = $this->guardarComprobante($request->comprobante_pago);
-        }
-
-        // Crear venta
-        $venta = Venta::create([
-            'cliente_id' => $cliente->cliente_id,
-            'fecha_venta' => now(),
-            'estado_venta' => 'Pendiente',
-            'total_venta' => $total,
-            'metodo_pago' => $request->metodo_pago,
-            'direccion_envio' => $request->direccion_envio,
-            'telefono_contacto' => $request->telefono_contacto,
-            'codigo_operacion' => $request->codigo_operacion,
-            'comprobante_pago' => $rutaComprobante, // Solo la ruta
-            'observaciones' => $request->observaciones,
+     * ⭐ CREAR VENTA DESDE CARRITO - CLOUDINARY DIRECTO
+     */
+    public function crearVentaDesdeCarrito(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'metodo_pago' => 'required|in:Efectivo,Transferencia,Yape,Plin',
+            'observaciones' => 'nullable|string',
+            'direccion_envio' => 'nullable|string|max:255',
+            'telefono_contacto' => 'nullable|string|max:20',
+            'codigo_operacion' => 'nullable|string|max:50',
+            'comprobante_pago' => 'nullable|string|max:1000', // ⭐ URL de Cloudinary
         ]);
 
-        // Crear detalles (NO descontar stock aún, esperar confirmación del vendedor)
-        foreach ($carrito->detalles as $detalle) {
-            DetalleVenta::create([
-                'venta_id' => $venta->venta_id,
-                'producto_id' => $detalle->producto_id,
-                'cantidad' => $detalle->cantidad,
-                'precio_unitario' => $detalle->precio_unitario,
-                'subtotal' => $detalle->precio_unitario * $detalle->cantidad,
-            ]);
-
-            // ⚠️ NO descontamos stock aquí porque el pedido está "Pendiente"
-            // El stock se descontará cuando el vendedor cambie el estado a "Confirmado" o "Completado"
-            // (Ver método cambiarEstado en VentaController)
+        if ($validator->fails()) {
+            return $this->validationErrorResponse($validator->errors());
         }
 
-        // Vaciar carrito
-        $carrito->detalles()->delete();
-        $carrito->estado = 'Convertido';
-        $carrito->save();
+        $cliente = $request->user()->cliente;
 
-        DB::commit();
+        if (!$cliente) {
+            return $this->errorResponse('Usuario no tiene perfil de cliente', 404);
+        }
 
-        $venta->load(['cliente', 'detalles.producto']);
+        $carrito = Carrito::where('cliente_id', $cliente->cliente_id)
+            ->where('estado', 'Activo')
+            ->with('detalles.producto')
+            ->first();
 
-        return $this->createdResponse($venta, 'Pedido realizado exitosamente');
+        if (!$carrito || $carrito->detalles->isEmpty()) {
+            return $this->errorResponse('El carrito está vacío', 400);
+        }
 
-    } catch (\Exception $e) {
-        DB::rollBack();
-        return $this->errorResponse('Error al procesar pedido: ' . $e->getMessage(), 500);
+        DB::beginTransaction();
+        try {
+            // Verificar stock
+            foreach ($carrito->detalles as $detalle) {
+                if ($detalle->producto->stock_disponible < $detalle->cantidad) {
+                    DB::rollBack();
+                    return $this->errorResponse(
+                        "Stock insuficiente para {$detalle->producto->nombre_producto}",
+                        400
+                    );
+                }
+            }
+
+            // Calcular total
+            $total = $carrito->detalles->sum(function ($detalle) {
+                return $detalle->precio_unitario * $detalle->cantidad;
+            });
+
+            // ⭐ VALIDAR Y LIMPIAR URL DE CLOUDINARY
+            $comprobanteUrl = null;
+            if ($request->filled('comprobante_pago')) {
+                $comprobanteUrl = $request->comprobante_pago;
+                
+                Log::info('📸 Comprobante recibido:', [
+                    'url' => $comprobanteUrl,
+                    'longitud' => strlen($comprobanteUrl),
+                ]);
+                
+                // Asegurarse de que tenga el protocolo correcto
+                if (!str_starts_with($comprobanteUrl, 'http://') && 
+                    !str_starts_with($comprobanteUrl, 'https://')) {
+                    $comprobanteUrl = 'https://' . $comprobanteUrl;
+                    Log::info('⚠️ Se agregó https:// al comprobante');
+                }
+                
+                // Validar que sea URL de Cloudinary
+                if (!str_contains($comprobanteUrl, 'cloudinary.com')) {
+                    DB::rollBack();
+                    Log::error('❌ URL no es de Cloudinary:', ['url' => $comprobanteUrl]);
+                    return $this->errorResponse('El comprobante debe ser una URL de Cloudinary', 400);
+                }
+                
+                Log::info('✅ URL de Cloudinary válida:', ['url' => $comprobanteUrl]);
+            }
+
+            // Crear venta
+            $venta = Venta::create([
+                'cliente_id' => $cliente->cliente_id,
+                'fecha_venta' => now(),
+                'estado_venta' => 'Pendiente',
+                'total_venta' => $total,
+                'metodo_pago' => $request->metodo_pago,
+                'direccion_envio' => $request->direccion_envio,
+                'telefono_contacto' => $request->telefono_contacto,
+                'codigo_operacion' => $request->codigo_operacion,
+                'comprobante_pago' => $comprobanteUrl, // ⭐ URL COMPLETA DE CLOUDINARY
+                'observaciones' => $request->observaciones,
+            ]);
+
+            // Crear detalles de venta
+            foreach ($carrito->detalles as $detalle) {
+                DetalleVenta::create([
+                    'venta_id' => $venta->venta_id,
+                    'producto_id' => $detalle->producto_id,
+                    'cantidad' => $detalle->cantidad,
+                    'precio_unitario' => $detalle->precio_unitario,
+                    'subtotal' => $detalle->precio_unitario * $detalle->cantidad,
+                ]);
+            }
+
+            // Vaciar carrito
+            $carrito->detalles()->delete();
+            $carrito->estado = 'Convertido';
+            $carrito->save();
+
+            DB::commit();
+
+            $venta->load(['cliente', 'detalles.producto']);
+
+            Log::info('✅ Pedido creado exitosamente:', [
+                'venta_id' => $venta->venta_id,
+                'cliente_id' => $cliente->cliente_id,
+                'total' => $venta->total_venta,
+                'comprobante_pago' => $venta->comprobante_pago,
+                'codigo_operacion' => $venta->codigo_operacion,
+            ]);
+
+            return $this->createdResponse($venta, 'Pedido realizado exitosamente');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('❌ Error al crear pedido:', [
+                'mensaje' => $e->getMessage(),
+                'linea' => $e->getLine(),
+                'archivo' => $e->getFile(),
+            ]);
+            return $this->errorResponse('Error al procesar pedido: ' . $e->getMessage(), 500);
+        }
     }
-}
-
-/**
- * Guardar comprobante base64 como imagen
- */
-private function guardarComprobante(string $base64): string
-{
-    // Extraer el contenido base64 puro (sin el prefijo data:image/...)
-    $image = preg_replace('/^data:image\/\w+;base64,/', '', $base64);
-    $image = str_replace(' ', '+', $image);
-    $imageData = base64_decode($image);
-
-    // Generar nombre único
-    $nombreArchivo = 'comprobante_' . time() . '_' . uniqid() . '.jpg';
-    $ruta = 'comprobantes/' . $nombreArchivo;
-    $rutaCompleta = storage_path('app/public/' . $ruta);
-
-    // Crear directorio si no existe
-    if (!file_exists(dirname($rutaCompleta))) {
-        mkdir(dirname($rutaCompleta), 0755, true);
-    }
-
-    // Guardar imagen
-    file_put_contents($rutaCompleta, $imageData);
-
-    return $ruta;
-}
 }
