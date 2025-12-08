@@ -248,70 +248,56 @@ class VentaController extends BaseController
     /**
      * 📸 SUBIR COMPROBANTE DE PAGO A CLOUDINARY
      */
-     public function subirComprobante(Request $request, $id)
-    {
-        try {
-            Log::info('📥 Recibiendo comprobante (URL):', [
-                'venta_id' => $id,
-                'data' => $request->all()
-            ]);
+     /**
+ * ⭐ GUARDAR URL DE COMPROBANTE (NO PROCESAR ARCHIVO)
+ */
+public function subirComprobante(Request $request, $id)
+{
+    $validator = Validator::make($request->all(), [
+        'comprobante_pago' => 'required|string|max:500', // URL de Cloudinary
+        'codigo_operacion' => 'nullable|string|max:50'
+    ]);
 
-            $validator = Validator::make($request->all(), [
-                'comprobante_pago' => 'required|string|max:500', // ⭐ URL de Cloudinary
-                'codigo_operacion' => 'nullable|string|max:50'
-            ]);
-
-            if ($validator->fails()) {
-                Log::error('❌ Validación fallida:', $validator->errors()->toArray());
-                return response()->json([
-                    'success' => false,
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $venta = Venta::find($id);
-
-            if (!$venta) {
-                return $this->notFoundResponse('Venta no encontrada');
-            }
-
-            // ⭐ GUARDAR URL (Angular ya subió a Cloudinary)
-            $venta->comprobante_pago = $request->comprobante_pago;
-            
-            if ($request->filled('codigo_operacion')) {
-                $venta->codigo_operacion = $request->codigo_operacion;
-            }
-
-            $venta->save();
-
-            Log::info('✅ Comprobante guardado:', [
-                'venta_id' => $venta->venta_id,
-                'comprobante_url' => $venta->comprobante_pago,
-                'codigo_operacion' => $venta->codigo_operacion
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Comprobante guardado exitosamente',
-                'data' => [
-                    'venta_id' => $venta->venta_id,
-                    'comprobante_pago' => $venta->comprobante_pago,
-                    'codigo_operacion' => $venta->codigo_operacion
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('❌ Error al guardar comprobante:', [
-                'mensaje' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al guardar comprobante: ' . $e->getMessage()
-            ], 500);
-        }
+    if ($validator->fails()) {
+        return response()->json([
+            'success' => false,
+            'errors' => $validator->errors()
+        ], 422);
     }
+
+    $venta = Venta::find($id);
+    
+    if (!$venta) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Venta no encontrada'
+        ], 404);
+    }
+
+    // ⭐ GUARDAR URL DIRECTAMENTE (SIN PROCESAR ARCHIVO)
+    $venta->comprobante_pago = $request->comprobante_pago;
+    
+    if ($request->filled('codigo_operacion')) {
+        $venta->codigo_operacion = $request->codigo_operacion;
+    }
+    
+    $venta->save();
+
+    Log::info('✅ Comprobante guardado:', [
+        'venta_id' => $venta->venta_id,
+        'comprobante_url' => $venta->comprobante_pago
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Comprobante guardado exitosamente',
+        'data' => [
+            'venta_id' => $venta->venta_id,
+            'comprobante_pago' => $venta->comprobante_pago,
+            'codigo_operacion' => $venta->codigo_operacion
+        ]
+    ]);
+}
 
     /**
      * CANCELAR PEDIDO (CLIENTE o ADMIN)
