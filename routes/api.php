@@ -48,14 +48,12 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     Route::get('/mis-pedidos', [VentaController::class, 'misPedidos']);
     Route::get('/pedidos/{id}', [VentaController::class, 'show']);
     Route::post('/pedidos/{id}/cancelar', [VentaController::class, 'cancelar']);
-    
-    // ⭐ NUEVO: Subir comprobante desde PEDIDOS (alias)
     Route::post('/pedidos/{id}/comprobante', [VentaController::class, 'subirComprobante']);
     
     // ===================================
     // 🛒 CARRITO DE COMPRAS
     // ===================================
-    Route::get('/carrito', [CarritoController::class, 'miCarrito']);
+    Route::get('/carrito', [CarritoController::class, 'obtenerCarrito']); // ⭐ CORREGIDO
     Route::post('/carrito/agregar', [CarritoController::class, 'agregarProducto']);
     Route::put('/carrito/actualizar/{detalleId}', [CarritoController::class, 'actualizarCantidad']);
     Route::delete('/carrito/eliminar/{detalleId}', [CarritoController::class, 'eliminarProducto']);
@@ -71,11 +69,9 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     Route::get('/ventas/{id}', [VentaController::class, 'show']);
     Route::put('/ventas/{id}/estado', [VentaController::class, 'actualizarEstado']);
     Route::get('/mis-ventas', [VentaController::class, 'misVentas']);
-    
-    // 📸 SUBIR COMPROBANTE (Cliente puede subir después de hacer pedido)
     Route::post('/ventas/{id}/comprobante', [VentaController::class, 'subirComprobante']);
     
-    // ⭐ NUEVO: Rutas admin para pedidos (para punto de venta)
+    // ⭐ Rutas admin para pedidos
     Route::middleware(['role:administrador,vendedor'])->group(function () {
         Route::get('/admin/pedidos', [VentaController::class, 'listarPedidos']);
         Route::put('/admin/pedidos/{id}/estado', [VentaController::class, 'actualizarEstado']);
@@ -111,13 +107,24 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     // 👥 CLIENTES (Admin y Vendedor)
     // ===================================
     Route::middleware(['role:administrador,vendedor'])->group(function () {
+        // ⭐ IMPORTANTE: Las rutas específicas ANTES de las dinámicas
+        Route::get('/clientes/buscar', [ClienteController::class, 'buscar']);
+        Route::get('/clientes/frecuentes', [ClienteController::class, 'clientesFrecuentes']);
+        Route::get('/clientes/telefono/{telefono}', [ClienteController::class, 'buscarPorTelefono']);
+        
+        // Rutas CRUD principales
         Route::get('/clientes', [ClienteController::class, 'index']);
+        Route::post('/clientes', [ClienteController::class, 'store']);
         Route::get('/clientes/{id}', [ClienteController::class, 'show']);
         Route::put('/clientes/{id}', [ClienteController::class, 'update']);
+        
+        // ⭐ HISTORIAL
+        Route::get('/clientes/{id}/historial', [ClienteController::class, 'obtenerHistorial']);
+        
+        Route::put('/clientes/{id}/preferencias', [ClienteController::class, 'actualizarPreferencias']);
     });
     
     Route::middleware(['role:administrador'])->group(function () {
         Route::delete('/clientes/{id}', [ClienteController::class, 'destroy']);
-   
     });
 });

@@ -590,6 +590,7 @@ class ComposerStaticInit0534dd56deeb189e53c65e2874833fce
         'App\\Http\\Controllers\\Api\\ProductoController' => __DIR__ . '/../..' . '/app/Http/Controllers/Api/ProductoController.php',
         'App\\Http\\Controllers\\Api\\ProveedorController' => __DIR__ . '/../..' . '/app/Http/Controllers/Api/ProveedorController.php',
         'App\\Http\\Controllers\\Api\\ReporteController' => __DIR__ . '/../..' . '/app/Http/Controllers/Api/ReporteController.php',
+        'App\\Http\\Controllers\\Api\\TestController' => __DIR__ . '/../..' . '/app/Http/Controllers/Api/TestController.php',
         'App\\Http\\Controllers\\Api\\VentaController' => __DIR__ . '/../..' . '/app/Http/Controllers/Api/VentaController.php',
         'App\\Http\\Controllers\\Controller' => __DIR__ . '/../..' . '/app/Http/Controllers/Controller.php',
         'App\\Http\\Middleware\\AdminMiddleware' => __DIR__ . '/../..' . '/app/Http/Middleware/AdminMiddleware.php',

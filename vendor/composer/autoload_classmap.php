@@ -16,6 +16,7 @@ return array(
     'App\\Http\\Controllers\\Api\\ProductoController' => $baseDir . '/app/Http/Controllers/Api/ProductoController.php',
     'App\\Http\\Controllers\\Api\\ProveedorController' => $baseDir . '/app/Http/Controllers/Api/ProveedorController.php',
     'App\\Http\\Controllers\\Api\\ReporteController' => $baseDir . '/app/Http/Controllers/Api/ReporteController.php',
+    'App\\Http\\Controllers\\Api\\TestController' => $baseDir . '/app/Http/Controllers/Api/TestController.php',
     'App\\Http\\Controllers\\Api\\VentaController' => $baseDir . '/app/Http/Controllers/Api/VentaController.php',
     'App\\Http\\Controllers\\Controller' => $baseDir . '/app/Http/Controllers/Controller.php',
     'App\\Http\\Middleware\\AdminMiddleware' => $baseDir . '/app/Http/Middleware/AdminMiddleware.php',
