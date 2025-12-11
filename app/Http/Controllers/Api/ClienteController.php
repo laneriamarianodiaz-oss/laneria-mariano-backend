@@ -57,8 +57,8 @@ class ClienteController extends BaseController
                     
                     return [
                         'cliente_id' => $cliente->cliente_id,
-                        'nombre_clie' => $cliente->nombre_cliente,
-                        'contacto_clie' => $cliente->contacto_cliente,
+                        'nombre_cliente' => $cliente->nombre_cliente,
+                        'contacto_cliente' => $cliente->contacto_cliente,
                         'telefono' => $cliente->telefono,
                         'email' => $cliente->email,
                         'direccion' => $cliente->direccion,
@@ -73,7 +73,7 @@ class ClienteController extends BaseController
                     
                     return [
                         'cliente_id' => $cliente->cliente_id,
-                        'nombre_clie' => $cliente->nombre_cliente,
+                        'nombre_cliente' => $cliente->nombre_cliente,
                         'contacto_clie' => $cliente->contacto_cliente,
                         'telefono' => $cliente->telefono,
                         'email' => $cliente->email,
@@ -209,46 +209,47 @@ class ClienteController extends BaseController
      * Crear nuevo cliente
      */
     public function store(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'nombre' => 'required|string|max:100',
-            'dni' => 'nullable|string|max:20',
-            'telefono' => 'required|string|max:9',
-            'email' => 'nullable|email|max:100',
-            'direccion' => 'nullable|string|max:255',
+{
+    $validator = Validator::make($request->all(), [
+        'nombre' => 'required|string|max:100',
+        'dni' => 'nullable|string|max:20',
+        'telefono' => 'required|string|max:9',
+        'email' => 'nullable|email|max:100',
+        'direccion' => 'nullable|string|max:255',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'success' => false,
+            'errors' => $validator->errors()
+        ], 422);
+    }
+
+    try {
+        $cliente = Cliente::create([
+            'nombre_cliente' => $request->nombre,
+            'dni' => $request->dni,
+            'telefono' => $request->telefono,
+            'email' => $request->email,
+            'direccion' => $request->direccion,
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'errors' => $validator->errors()
-            ], 422);
-        }
+        // ✅ Devolver directamente el modelo creado
+        return response()->json([
+            'success' => true,
+            'data' => $cliente,
+            'message' => 'Cliente registrado exitosamente'
+        ], 201);
 
-        try {
-            $cliente = Cliente::create([
-                'nombre_cliente' => $request->nombre,
-                'dni' => $request->dni,
-                'telefono' => $request->telefono,
-                'email' => $request->email,
-                'direccion' => $request->direccion,
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $cliente,
-                'message' => 'Cliente registrado exitosamente'
-            ], 201);
-
-        } catch (\Exception $e) {
-            \Log::error('❌ Error al crear cliente: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al crear cliente',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+    } catch (\Exception $e) {
+        \Log::error('❌ Error al crear cliente: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al crear cliente',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * Actualizar cliente
@@ -362,49 +363,50 @@ class ClienteController extends BaseController
      * Buscar cliente por nombre, DNI o teléfono
      */
     public function buscar(Request $request)
-    {
-        try {
-            $busqueda = $request->get('q');
+{
+    try {
+        $busqueda = $request->get('q');
 
-            if (!$busqueda) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Debe proporcionar un término de búsqueda',
-                    'data' => []
-                ], 400);
-            }
-
-            $clientes = Cliente::where(function($query) use ($busqueda) {
-                $query->where('nombre_cliente', 'LIKE', "%{$busqueda}%")
-                      ->orWhere('dni', 'LIKE', "%{$busqueda}%")
-                      ->orWhere('telefono', 'LIKE', "%{$busqueda}%");
-            })
-            ->limit(10)
-            ->get();
-
-            if ($clientes->isEmpty()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No se encontraron clientes',
-                    'data' => []
-                ], 404);
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Clientes encontrados',
-                'data' => $clientes
-            ]);
-
-        } catch (\Exception $e) {
-            \Log::error('❌ Error al buscar cliente: ' . $e->getMessage());
+        if (!$busqueda) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error al buscar cliente',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Debe proporcionar un término de búsqueda',
+                'data' => []
+            ], 400);
         }
+
+        $clientes = Cliente::where(function($query) use ($busqueda) {
+            $query->where('nombre_cliente', 'LIKE', "%{$busqueda}%")
+                  ->orWhere('dni', 'LIKE', "%{$busqueda}%")
+                  ->orWhere('telefono', 'LIKE', "%{$busqueda}%");
+        })
+        ->limit(10)
+        ->get();
+
+        if ($clientes->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se encontraron clientes',
+                'data' => []
+            ], 404);
+        }
+
+        // ✅ Devolver directamente lo que hay en la base de datos
+        return response()->json([
+            'success' => true,
+            'message' => 'Clientes encontrados',
+            'data' => $clientes
+        ]);
+
+    } catch (\Exception $e) {
+        \Log::error('❌ Error al buscar cliente: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al buscar cliente',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * Obtener clientes frecuentes
@@ -428,7 +430,7 @@ class ClienteController extends BaseController
             
             return [
                 'cliente_id' => $cliente->cliente_id,
-                'nombre_clie' => $cliente->nombre_cliente,
+                'nombre_cliente' => $cliente->nombre_cliente,
                 'telefono' => $cliente->telefono,
                 'email' => $cliente->email,
                 'total_compras' => $cliente->ventas_count,
