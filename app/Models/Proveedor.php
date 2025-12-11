@@ -25,7 +25,7 @@ class Proveedor extends Model
     protected $casts = [
         'fecha_registro' => 'datetime',
     ];
-
+   
     /**
      * Relación: Un proveedor tiene muchos productos
      */
