@@ -8,7 +8,10 @@ use App\Models\Venta;
 use App\Models\Cliente;
 use App\Models\Proveedor;
 use App\Models\Producto;
+use App\Models\DetalleVenta;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class EstadisticasController extends Controller
 {
@@ -24,39 +27,40 @@ class EstadisticasController extends Controller
             $inicioMes = Carbon::now()->startOfMonth();
             $mesAnterior = Carbon::now()->subMonth();
 
+            // ✅ CORRECCIÓN: Usar 'Completado' (sin 'a')
             // Ventas de hoy
             $ventasHoy = Venta::whereDate('fecha_venta', $hoy)
-                ->where('estado_venta', 'Completada')
+                ->where('estado_venta', 'Completado')
                 ->sum('total_venta') ?? 0;
 
             // Ventas de ayer
             $ventasAyer = Venta::whereDate('fecha_venta', $ayer)
-                ->where('estado_venta', 'Completada')
+                ->where('estado_venta', 'Completado')
                 ->sum('total_venta') ?? 0;
 
             // Ventas del mes actual
             $ventasMes = Venta::whereDate('fecha_venta', '>=', $inicioMes)
-                ->where('estado_venta', 'Completada')
+                ->where('estado_venta', 'Completado')
                 ->sum('total_venta') ?? 0;
 
             // Ventas del mes anterior
             $ventasMesAnterior = Venta::whereYear('fecha_venta', $mesAnterior->year)
                 ->whereMonth('fecha_venta', $mesAnterior->month)
-                ->where('estado_venta', 'Completada')
+                ->where('estado_venta', 'Completado')
                 ->sum('total_venta') ?? 0;
 
             // Ticket promedio del mes
             $cantidadVentasMes = Venta::whereDate('fecha_venta', '>=', $inicioMes)
-                ->where('estado_venta', 'Completada')
+                ->where('estado_venta', 'Completado')
                 ->count();
             
             $ticketPromedio = $cantidadVentasMes > 0 ? $ventasMes / $cantidadVentasMes : 0;
 
-            // Productos con stock bajo (comparar stock_disponible con stock_minimo)
-// DESPUÉS (CORRECTO):
-$productosStockBajo = Producto::whereColumn('stock_disponible', '<=', 'stock_minimo')
-    ->where('estado_producto', 'Activo')
-    ->count();
+            // ✅ CORRECCIÓN: Productos con stock bajo
+            $productosStockBajo = Producto::whereColumn('stock_disponible', '<=', 'stock_minimo')
+                ->where('estado_producto', 'Activo')
+                ->count();
+
             // Calcular cambios porcentuales
             $cambioVentasHoy = $ventasAyer > 0 
                 ? round((($ventasHoy - $ventasAyer) / $ventasAyer) * 100, 1)
@@ -65,6 +69,12 @@ $productosStockBajo = Producto::whereColumn('stock_disponible', '<=', 'stock_min
             $cambioVentasMes = $ventasMesAnterior > 0
                 ? round((($ventasMes - $ventasMesAnterior) / $ventasMesAnterior) * 100, 1)
                 : 0;
+
+            Log::info('📊 Estadísticas calculadas:', [
+                'ventasHoy' => $ventasHoy,
+                'ventasMes' => $ventasMes,
+                'productosStockBajo' => $productosStockBajo
+            ]);
 
             return response()->json([
                 'ventasHoy' => (float) $ventasHoy,
@@ -77,11 +87,222 @@ $productosStockBajo = Producto::whereColumn('stock_disponible', '<=', 'stock_min
             ], 200);
 
         } catch (\Exception $e) {
+            Log::error('❌ Error en estadísticas de ventas:', [
+                'mensaje' => $e->getMessage(),
+                'linea' => $e->getLine()
+            ]);
+            
             return response()->json([
                 'error' => 'Error al obtener estadísticas',
                 'message' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * ⭐ NUEVO: Ventas de la última semana (para el gráfico)
+     */
+    public function ventasSemana()
+    {
+        try {
+            $ventasSemana = [];
+            $diasSemana = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+            
+            for ($i = 6; $i >= 0; $i--) {
+                $fecha = Carbon::today()->subDays($i);
+                
+                $total = Venta::whereDate('fecha_venta', $fecha)
+                    ->where('estado_venta', 'Completado')
+                    ->sum('total_venta') ?? 0;
+                
+                $ventasSemana[] = [
+                    'fecha' => $diasSemana[$fecha->dayOfWeek === 0 ? 6 : $fecha->dayOfWeek - 1],
+                    'total' => (float) $total
+                ];
+            }
+
+            return response()->json($ventasSemana, 200);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Error en ventas semana:', [
+                'mensaje' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'error' => 'Error al obtener ventas de la semana',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * ⭐ NUEVO: Últimas ventas recientes
+     */
+    public function ventasRecientes(Request $request)
+    {
+        try {
+            $limite = $request->get('limite', 5);
+            
+            $ventas = Venta::with(['cliente'])
+                ->orderBy('fecha_venta', 'desc')
+                ->limit($limite)
+                ->get();
+
+            $ventasMapeadas = $ventas->map(function($venta) {
+                return [
+                    'id' => $venta->venta_id,
+                    'numero' => $venta->numero_venta,
+                    'fecha' => $venta->fecha_venta->format('d/m/Y H:i'),
+                    'cliente' => $venta->cliente->nombre_cliente ?? 'Cliente',
+                    'total' => (float) $venta->total_venta,
+                    'estado' => $this->normalizarEstado($venta->estado_venta)
+                ];
+            });
+
+            return response()->json($ventasMapeadas, 200);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Error en ventas recientes:', [
+                'mensaje' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'error' => 'Error al obtener ventas recientes',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * ⭐ NUEVO: Top 5 productos más vendidos
+     */
+    public function topProductos(Request $request)
+    {
+        try {
+            $limite = $request->get('limite', 5);
+            $diasAtras = $request->get('dias', 30); // Por defecto últimos 30 días
+            
+            $fechaInicio = Carbon::now()->subDays($diasAtras);
+
+            $topProductos = DB::table('detalle_venta')
+                ->join('productos', 'detalle_venta.producto_id', '=', 'productos.producto_id')
+                ->join('ventas', 'detalle_venta.venta_id', '=', 'ventas.venta_id')
+                ->where('ventas.fecha_venta', '>=', $fechaInicio)
+                ->where('ventas.estado_venta', 'Completado')
+                ->select(
+                    'productos.producto_id as id',
+                    'productos.nombre_producto as nombre',
+                    DB::raw('SUM(detalle_venta.cantidad) as cantidadVendida')
+                )
+                ->groupBy('productos.producto_id', 'productos.nombre_producto')
+                ->orderBy('cantidadVendida', 'desc')
+                ->limit($limite)
+                ->get();
+
+            return response()->json($topProductos, 200);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Error en top productos:', [
+                'mensaje' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'error' => 'Error al obtener top productos',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * ⭐ NUEVO: Alertas de stock bajo para el dashboard
+     */
+    public function alertasStockDashboard()
+    {
+        try {
+            $productos = Producto::whereColumn('stock_disponible', '<=', 'stock_minimo')
+                ->where('estado_producto', 'Activo')
+                ->orderBy('stock_disponible', 'asc')
+                ->limit(5)
+                ->get();
+
+            $alertas = $productos->map(function($producto) {
+                $porcentaje = $producto->stock_minimo > 0 
+                    ? ($producto->stock_disponible / $producto->stock_minimo) * 100 
+                    : 0;
+
+                return [
+                    'id' => $producto->producto_id,
+                    'nombre' => $producto->nombre_producto,
+                    'codigo' => $producto->codigo_producto ?? 'N/A',
+                    'stock' => $producto->stock_disponible,
+                    'stockMinimo' => $producto->stock_minimo,
+                    'estado' => $porcentaje <= 50 ? 'critico' : 'bajo'
+                ];
+            });
+
+            return response()->json($alertas, 200);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Error en alertas de stock:', [
+                'mensaje' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'error' => 'Error al obtener alertas de stock',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * ⭐ NUEVO: Datos completos del dashboard en una sola llamada
+     */
+    public function dashboardCompleto()
+    {
+        try {
+            // Obtener todas las estadísticas en una sola respuesta
+            $estadisticas = $this->ventas()->getData();
+            $ventasSemana = $this->ventasSemana()->getData();
+            $ventasRecientes = $this->ventasRecientes(request())->getData();
+            $topProductos = $this->topProductos(request())->getData();
+            $alertasStock = $this->alertasStockDashboard()->getData();
+
+            return response()->json([
+                'estadisticas' => $estadisticas,
+                'ventasSemana' => $ventasSemana,
+                'ventasRecientes' => $ventasRecientes,
+                'topProductos' => $topProductos,
+                'alertasStock' => $alertasStock
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Error en dashboard completo:', [
+                'mensaje' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'error' => 'Error al obtener datos del dashboard',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Normalizar estado de venta para el frontend
+     */
+    private function normalizarEstado($estado)
+    {
+        $estados = [
+            'Pendiente' => 'pendiente',
+            'Confirmado' => 'pendiente',
+            'En Proceso' => 'pendiente',
+            'Enviado' => 'pendiente',
+            'Entregado' => 'completada',
+            'Completado' => 'completada',
+            'Cancelado' => 'cancelada'
+        ];
+
+        return $estados[$estado] ?? 'pendiente';
     }
 
     /**
@@ -103,45 +324,6 @@ $productosStockBajo = Producto::whereColumn('stock_disponible', '<=', 'stock_min
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Error al obtener estadísticas de clientes',
-                'message' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Estadísticas de proveedores
-     */
-    public function proveedores()
-    {
-        try {
-            $totalProveedores = Proveedor::count();
-            
-            return response()->json([
-                'totalProveedores' => $totalProveedores,
-                'proveedoresActivos' => $totalProveedores
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Error al obtener estadísticas de proveedores',
-                'message' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Pedidos activos
-     */
-    public function pedidosActivos()
-    {
-        try {
-            return response()->json([
-                'pedidosPendientes' => 0,
-                'pedidosEnProceso' => 0,
-                'pedidosListos' => 0
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Error al obtener pedidos activos',
                 'message' => $e->getMessage()
             ], 500);
         }

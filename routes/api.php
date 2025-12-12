@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\InventarioController;
 use App\Http\Controllers\Api\VentaController;
 use App\Http\Controllers\Api\ClienteController;
 use App\Http\Controllers\Api\CarritoController;
+use App\Http\Controllers\Api\EstadisticasController;
 
 // ============================================
 // 🔐 AUTENTICACIÓN (PÚBLICAS)
@@ -41,7 +42,7 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::get('/auth/mi-perfil', [AuthController::class, 'miPerfil']);
-    Route::put('/auth/actualizar-perfil', [AuthController::class, 'actualizarPerfil']); // ⭐ NUEVO
+    Route::put('/auth/actualizar-perfil', [AuthController::class, 'actualizarPerfil']);
     
     // ===================================
     // 📦 PEDIDOS (CLIENTES)
@@ -72,8 +73,24 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     Route::get('/mis-ventas', [VentaController::class, 'misVentas']);
     Route::post('/ventas/{id}/comprobante', [VentaController::class, 'subirComprobante']);
     
-    // ⭐ Rutas admin para pedidos
+    // ===================================
+    // 📊 ESTADÍSTICAS Y DASHBOARD (Admin y Vendedor)
+    // ===================================
     Route::middleware(['role:administrador,vendedor'])->group(function () {
+        // Estadísticas principales
+        Route::get('/ventas/estadisticas', [EstadisticasController::class, 'ventas']);
+        Route::get('/ventas/semana', [EstadisticasController::class, 'ventasSemana']);
+        Route::get('/ventas/recientes', [EstadisticasController::class, 'ventasRecientes']);
+        Route::get('/ventas/top-productos', [EstadisticasController::class, 'topProductos']);
+        
+        // Dashboard
+        Route::get('/dashboard/alertas-stock', [EstadisticasController::class, 'alertasStockDashboard']);
+        Route::get('/dashboard/completo', [EstadisticasController::class, 'dashboardCompleto']);
+        
+        // Otras estadísticas
+        Route::get('/estadisticas/clientes', [EstadisticasController::class, 'clientes']);
+        
+        // Admin pedidos
         Route::get('/admin/pedidos', [VentaController::class, 'listarPedidos']);
         Route::put('/admin/pedidos/{id}/estado', [VentaController::class, 'actualizarEstado']);
     });
