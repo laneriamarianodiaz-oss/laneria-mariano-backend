@@ -20,6 +20,7 @@ class InventarioController extends BaseController
                 'codigo_producto as codigo_lana',
                 'nombre_producto',
                 'tipo_de_producto as producto_tipo',
+                'categoria',  // ⭐ CAMPO AGREGADO
                 'color_producto as producto_color',
                 'precio_producto as producto_precio',
                 'stock_disponible as stock_actual',
@@ -38,7 +39,7 @@ class InventarioController extends BaseController
             }
 
             if ($request->has('categoria')) {
-                $query->where('tipo_de_producto', $request->categoria);
+                $query->where('categoria', $request->categoria);
             }
 
             if ($request->has('estado')) {
@@ -88,6 +89,7 @@ class InventarioController extends BaseController
             'codigo_producto as codigo_lana',
             'nombre_producto',
             'tipo_de_producto as producto_tipo',
+            'categoria',  // ⭐ CAMPO AGREGADO
             'color_producto as producto_color',
             'precio_producto as producto_precio',
             'stock_disponible as stock_actual',
@@ -165,6 +167,7 @@ class InventarioController extends BaseController
                 'producto_id as inventario_id',
                 'codigo_producto as codigo_lana',
                 'nombre_producto',
+                'categoria',  // ⭐ CAMPO AGREGADO
                 'stock_disponible as stock_actual',
                 'stock_minimo',
                 'precio_producto as producto_precio'
@@ -179,6 +182,7 @@ class InventarioController extends BaseController
                     'inventario_id' => $producto->inventario_id,
                     'codigo_lana' => $producto->codigo_lana,
                     'producto_nombre' => $producto->nombre_producto,
+                    'categoria' => $producto->categoria,  // ⭐ CAMPO AGREGADO
                     'stock_actual' => $producto->stock_actual,
                     'stock_minimo' => $producto->stock_minimo,
                     'diferencia' => $producto->stock_minimo - $producto->stock_actual,
@@ -206,6 +210,7 @@ class InventarioController extends BaseController
             'producto_id',
             'nombre_producto',
             'tipo_de_producto',
+            'categoria',  // ⭐ CAMPO AGREGADO
             'updated_at as ultima_actualizacion'
         )
         ->where('estado_producto', 'Activo')
