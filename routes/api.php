@@ -41,6 +41,7 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::get('/auth/mi-perfil', [AuthController::class, 'miPerfil']);
+    Route::put('/auth/actualizar-perfil', [AuthController::class, 'actualizarPerfil']); // ⭐ NUEVO
     
     // ===================================
     // 📦 PEDIDOS (CLIENTES)
@@ -53,7 +54,7 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     // ===================================
     // 🛒 CARRITO DE COMPRAS
     // ===================================
-    Route::get('/carrito', [CarritoController::class, 'obtenerCarrito']); // ⭐ CORREGIDO
+    Route::get('/carrito', [CarritoController::class, 'obtenerCarrito']);
     Route::post('/carrito/agregar', [CarritoController::class, 'agregarProducto']);
     Route::put('/carrito/actualizar/{detalleId}', [CarritoController::class, 'actualizarCantidad']);
     Route::delete('/carrito/eliminar/{detalleId}', [CarritoController::class, 'eliminarProducto']);
