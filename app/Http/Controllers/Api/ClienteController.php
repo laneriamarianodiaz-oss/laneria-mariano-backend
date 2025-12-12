@@ -41,10 +41,8 @@ class ClienteController extends BaseController
             $orderDir = $request->get('order_dir', 'desc');
             $query->orderBy($orderBy, $orderDir);
 
-            // Obtener clientes
             $clientes = $query->get();
             
-            // Procesar con estadísticas usando SQL directo
             $clientesConEstadisticas = $clientes->map(function($cliente) {
                 try {
                     $ventas = Venta::where('cliente_id', $cliente->cliente_id)
@@ -52,7 +50,6 @@ class ClienteController extends BaseController
                         ->orderBy('fecha_venta', 'desc')
                         ->get();
                     
-                    // ⭐ USAR total_venta directamente (columna real)
                     $totalCompras = $ventas->sum('total_venta');
                     
                     return [
@@ -62,7 +59,8 @@ class ClienteController extends BaseController
                         'telefono' => $cliente->telefono,
                         'email' => $cliente->email,
                         'direccion' => $cliente->direccion,
-                        'preferencias_clie' => $cliente->preferencias_cliente,
+                        'dni' => $cliente->dni,
+                        'preferencias_cliente' => $cliente->preferencias_cliente,
                         'fecha_registro' => $cliente->created_at ? $cliente->created_at->format('Y-m-d H:i:s') : null,
                         'total_compras' => (float) $totalCompras,
                         'cantidad_compras' => (int) $ventas->count(),
@@ -74,11 +72,12 @@ class ClienteController extends BaseController
                     return [
                         'cliente_id' => $cliente->cliente_id,
                         'nombre_cliente' => $cliente->nombre_cliente,
-                        'contacto_clie' => $cliente->contacto_cliente,
+                        'contacto_cliente' => $cliente->contacto_cliente,
                         'telefono' => $cliente->telefono,
                         'email' => $cliente->email,
                         'direccion' => $cliente->direccion,
-                        'preferencias_clie' => $cliente->preferencias_cliente,
+                        'dni' => $cliente->dni,
+                        'preferencias_cliente' => $cliente->preferencias_cliente,
                         'fecha_registro' => $cliente->created_at ? $cliente->created_at->format('Y-m-d H:i:s') : null,
                         'total_compras' => 0,
                         'cantidad_compras' => 0,
@@ -87,7 +86,6 @@ class ClienteController extends BaseController
                 }
             });
 
-            // Paginación manual
             $perPage = $request->get('per_page', 15);
             $pagina = $request->get('page', 1);
             
@@ -117,7 +115,7 @@ class ClienteController extends BaseController
     }
 
     /**
-     * ⭐ HISTORIAL DE COMPRAS
+     * Obtener historial de compras
      */
     public function obtenerHistorial($id)
     {
@@ -134,7 +132,7 @@ class ClienteController extends BaseController
                     'venta_id' => $venta->venta_id,
                     'numero_venta' => $venta->numero_venta,
                     'fecha_venta' => $venta->fecha_venta,
-                    'total' => (float) $venta->total_venta, // ⭐ Usar columna real
+                    'total' => (float) $venta->total_venta,
                     'estado_venta' => $venta->estado_venta ?? 'Pendiente',
                     'metodo_pago' => $venta->metodo_pago ?? 'Efectivo',
                     'productos' => $venta->detalles->map(function($detalle) {
@@ -164,7 +162,6 @@ class ClienteController extends BaseController
             
         } catch (\Exception $e) {
             \Log::error('❌ Error al obtener historial: ' . $e->getMessage());
-            \Log::error($e->getTraceAsString());
             
             return response()->json([
                 'success' => false,
@@ -190,7 +187,7 @@ class ClienteController extends BaseController
                 ->get();
             
             $totalCompras = $ventas->count();
-            $totalGastado = $ventas->sum('total_venta'); // ⭐ Usar columna real
+            $totalGastado = $ventas->sum('total_venta');
 
             $cliente->estadisticas = [
                 'total_compras' => $totalCompras,
@@ -206,50 +203,126 @@ class ClienteController extends BaseController
     }
 
     /**
-     * Crear nuevo cliente
+     * ⭐ BUSCAR CLIENTE - MÉTODO PRINCIPAL
+     */
+    public function buscar(Request $request)
+    {
+        try {
+            $busqueda = $request->get('q');
+            
+            \Log::info('🔍 === BÚSQUEDA DE CLIENTE ===');
+            \Log::info('Término: ' . $busqueda);
+
+            if (!$busqueda) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Debe proporcionar un término de búsqueda',
+                    'data' => []
+                ], 400);
+            }
+
+            $clientes = Cliente::where(function($query) use ($busqueda) {
+                $query->where('nombre_cliente', 'LIKE', "%{$busqueda}%")
+                      ->orWhere('dni', 'LIKE', "%{$busqueda}%")
+                      ->orWhere('telefono', 'LIKE', "%{$busqueda}%");
+            })
+            ->limit(10)
+            ->get();
+
+            \Log::info('Clientes encontrados: ' . $clientes->count());
+
+            if ($clientes->isEmpty()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontraron clientes',
+                    'data' => []
+                ], 404);
+            }
+
+            // Normalizar datos
+            $clientesNormalizados = $clientes->map(function($cliente) {
+                return [
+                    'cliente_id' => $cliente->cliente_id,
+                    'nombre_cliente' => $cliente->nombre_cliente,
+                    'dni' => $cliente->dni,
+                    'telefono' => $cliente->telefono,
+                    'email' => $cliente->email,
+                    'direccion' => $cliente->direccion,
+                    'contacto_cliente' => $cliente->contacto_cliente,
+                    'preferencias_cliente' => $cliente->preferencias_cliente,
+                ];
+            });
+
+            \Log::info('✅ Enviando respuesta exitosa');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Clientes encontrados',
+                'data' => $clientesNormalizados
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('❌ Error al buscar cliente: ' . $e->getMessage());
+            \Log::error('Stack: ' . $e->getTraceAsString());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al buscar cliente',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * ⭐ CREAR NUEVO CLIENTE
      */
     public function store(Request $request)
-{
-    $validator = Validator::make($request->all(), [
-        'nombre' => 'required|string|max:100',
-        'dni' => 'nullable|string|max:20',
-        'telefono' => 'required|string|max:9',
-        'email' => 'nullable|email|max:100',
-        'direccion' => 'nullable|string|max:255',
-    ]);
+    {
+        \Log::info('📝 === CREAR CLIENTE ===');
+        \Log::info('Datos: ' . json_encode($request->all()));
 
-    if ($validator->fails()) {
-        return response()->json([
-            'success' => false,
-            'errors' => $validator->errors()
-        ], 422);
-    }
-
-    try {
-        $cliente = Cliente::create([
-            'nombre_cliente' => $request->nombre,
-            'dni' => $request->dni,
-            'telefono' => $request->telefono,
-            'email' => $request->email,
-            'direccion' => $request->direccion,
+        $validator = Validator::make($request->all(), [
+            'nombre' => 'required|string|max:100',
+            'dni' => 'nullable|string|max:20',
+            'telefono' => 'required|string|max:9',
+            'email' => 'nullable|email|max:100',
+            'direccion' => 'nullable|string|max:255',
         ]);
 
-        // ✅ Devolver directamente el modelo creado
-        return response()->json([
-            'success' => true,
-            'data' => $cliente,
-            'message' => 'Cliente registrado exitosamente'
-        ], 201);
+        if ($validator->fails()) {
+            \Log::warning('❌ Validación fallida');
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
 
-    } catch (\Exception $e) {
-        \Log::error('❌ Error al crear cliente: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'message' => 'Error al crear cliente',
-            'error' => $e->getMessage()
-        ], 500);
+        try {
+            $cliente = Cliente::create([
+                'nombre_cliente' => $request->nombre,
+                'dni' => $request->dni,
+                'telefono' => $request->telefono,
+                'email' => $request->email,
+                'direccion' => $request->direccion,
+            ]);
+
+            \Log::info('✅ Cliente creado: ' . $cliente->cliente_id);
+
+            return response()->json([
+                'success' => true,
+                'data' => $cliente,
+                'message' => 'Cliente registrado exitosamente'
+            ], 201);
+
+        } catch (\Exception $e) {
+            \Log::error('❌ Error al crear: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al crear cliente',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
-}
 
     /**
      * Actualizar cliente
@@ -350,63 +423,13 @@ class ClienteController extends BaseController
             ], 404);
 
         } catch (\Exception $e) {
-            \Log::error('❌ Error al buscar cliente: ' . $e->getMessage());
+            \Log::error('❌ Error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error al buscar cliente',
-                'error' => $e->getMessage()
+                'message' => 'Error al buscar cliente'
             ], 500);
         }
     }
-
-    /**
-     * Buscar cliente por nombre, DNI o teléfono
-     */
-    public function buscar(Request $request)
-{
-    try {
-        $busqueda = $request->get('q');
-
-        if (!$busqueda) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Debe proporcionar un término de búsqueda',
-                'data' => []
-            ], 400);
-        }
-
-        $clientes = Cliente::where(function($query) use ($busqueda) {
-            $query->where('nombre_cliente', 'LIKE', "%{$busqueda}%")
-                  ->orWhere('dni', 'LIKE', "%{$busqueda}%")
-                  ->orWhere('telefono', 'LIKE', "%{$busqueda}%");
-        })
-        ->limit(10)
-        ->get();
-
-        if ($clientes->isEmpty()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No se encontraron clientes',
-                'data' => []
-            ], 404);
-        }
-
-        // ✅ Devolver directamente lo que hay en la base de datos
-        return response()->json([
-            'success' => true,
-            'message' => 'Clientes encontrados',
-            'data' => $clientes
-        ]);
-
-    } catch (\Exception $e) {
-        \Log::error('❌ Error al buscar cliente: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'message' => 'Error al buscar cliente',
-            'error' => $e->getMessage()
-        ], 500);
-    }
-}
 
     /**
      * Obtener clientes frecuentes
@@ -426,7 +449,7 @@ class ClienteController extends BaseController
                 ->where('estado_venta', '!=', 'Cancelado')
                 ->get();
             
-            $totalGastado = $ventas->sum('total_venta'); // ⭐ Usar columna real
+            $totalGastado = $ventas->sum('total_venta');
             
             return [
                 'cliente_id' => $cliente->cliente_id,
@@ -442,7 +465,7 @@ class ClienteController extends BaseController
     }
 
     /**
-     * Actualizar preferencias del cliente
+     * Actualizar preferencias
      */
     public function actualizarPreferencias(Request $request, $id)
     {
@@ -465,5 +488,4 @@ class ClienteController extends BaseController
 
         return $this->successResponse($cliente, 'Preferencias actualizadas exitosamente');
     }
-    
 }
