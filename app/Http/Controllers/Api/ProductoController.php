@@ -33,6 +33,7 @@ class ProductoController extends BaseController
                 $query->where('tipo_de_producto', $request->tipo);
             }
             
+            
             if ($request->has('color')) {
                 $query->where('color_producto', $request->color);
             }
