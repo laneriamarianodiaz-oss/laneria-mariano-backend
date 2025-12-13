@@ -11,14 +11,15 @@ class Venta extends Model
 
     protected $table = 'ventas';
     protected $primaryKey = 'venta_id';
-    
-    // ✅ LA TABLA SÍ TIENE created_at y updated_at, así que SE ACTIVAN
     public $timestamps = true;
 
     protected $fillable = [
         'cliente_id',
+        'user_id',
         'fecha_venta', 
         'estado_venta',
+        'subtotal',
+        'descuento',
         'total_venta',
         'metodo_pago',
         'canal_venta',
@@ -32,12 +33,13 @@ class Venta extends Model
     protected $casts = [
         'fecha_venta' => 'datetime',
         'total_venta' => 'decimal:2',
+        'subtotal' => 'decimal:2',
+        'descuento' => 'decimal:2',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
 
-    // Appends para que siempre incluya estos campos virtuales
-    protected $appends = ['numero_venta', 'total', 'subtotal', 'descuento'];
+    protected $appends = ['numero_venta'];
 
     /**
      * Generar número de venta automáticamente
@@ -48,42 +50,19 @@ class Venta extends Model
     }
 
     /**
-     * Accessor para compatibilidad - total
-     */
-    public function getTotalAttribute()
-    {
-        return $this->total_venta ?? 0;
-    }
-
-    /**
-     * Accessor para subtotal (calcular desde detalles si están cargados)
-     */
-    public function getSubtotalAttribute()
-    {
-        if ($this->relationLoaded('detalles') && $this->detalles) {
-            return $this->detalles->sum('subtotal');
-        }
-        return $this->total_venta ?? 0;
-    }
-
-    /**
-     * Accessor para descuento
-     */
-    public function getDescuentoAttribute()
-    {
-        if ($this->relationLoaded('detalles') && $this->detalles) {
-            $subtotal = $this->detalles->sum('subtotal');
-            return max(0, $subtotal - $this->total_venta);
-        }
-        return 0;
-    }
-
-    /**
      * Relación: Una venta pertenece a un cliente
      */
     public function cliente()
     {
         return $this->belongsTo(Cliente::class, 'cliente_id', 'cliente_id');
+    }
+
+    /**
+     * Relación: Una venta pertenece a un usuario
+     */
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id', 'id');
     }
 
     /**

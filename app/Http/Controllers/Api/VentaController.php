@@ -25,7 +25,6 @@ class VentaController extends BaseController
     {
         $query = Venta::with(['cliente', 'detalles.producto']);
 
-        // Filtros
         if ($request->has('estado')) {
             $query->where('estado_venta', $request->estado);
         }
@@ -56,16 +55,13 @@ class VentaController extends BaseController
             ]);
         }
 
-        // Ordenamiento
         $orderBy = $request->get('order_by', 'fecha_venta');
         $orderDir = $request->get('order_dir', 'desc');
         $query->orderBy($orderBy, $orderDir);
 
-        // Paginación
         $perPage = $request->get('per_page', 15);
         $ventas = $query->paginate($perPage);
 
-        // Mapear datos
         $ventas->getCollection()->transform(function ($venta) {
             return $this->mapearVenta($venta);
         });
@@ -74,13 +70,12 @@ class VentaController extends BaseController
     }
 
     /**
-     * ⭐ LISTAR PEDIDOS ONLINE (Para admin/punto de venta)
+     * Listar pedidos online
      */
     public function listarPedidos(Request $request)
     {
         $query = Venta::with(['cliente', 'detalles.producto', 'comprobante']);
 
-        // Filtros
         if ($request->has('estado')) {
             $query->where('estado_venta', $request->estado);
         }
@@ -93,16 +88,7 @@ class VentaController extends BaseController
             $query->where('cliente_id', $request->cliente_id);
         }
 
-        // Ordenar por más recientes
         $ventas = $query->orderBy('fecha_venta', 'desc')->get();
-
-        Log::info('📦 Ventas encontradas:', [
-            'cantidad' => $ventas->count(),
-            'primera_venta_id' => $ventas->first()?->venta_id,
-            'tiene_cliente' => $ventas->first()?->cliente ? 'SÍ' : 'NO',
-            'email_cliente' => $ventas->first()?->cliente?->email,
-            'cantidad_detalles' => $ventas->first()?->detalles?->count()
-        ]);
 
         $ventasMapeadas = $ventas->map(function ($venta) {
             return $this->mapearVenta($venta);
@@ -112,7 +98,7 @@ class VentaController extends BaseController
     }
 
     /**
-     * Obtener MIS PEDIDOS (CLIENTE AUTENTICADO)
+     * Obtener mis pedidos (cliente autenticado)
      */
     public function misPedidos(Request $request)
     {
@@ -125,7 +111,6 @@ class VentaController extends BaseController
         $query = Venta::with(['detalles.producto'])
             ->where('cliente_id', $cliente->cliente_id);
 
-        // Filtro por estado (opcional)
         if ($request->has('estado')) {
             $query->where('estado_venta', $request->estado);
         }
@@ -155,7 +140,7 @@ class VentaController extends BaseController
     }
 
     /**
-     * ACTUALIZAR ESTADO DE PEDIDO (ADMIN)
+     * Actualizar estado de pedido
      */
     public function actualizarEstado(Request $request, $id)
     {
@@ -179,12 +164,10 @@ class VentaController extends BaseController
             $estadoAnterior = $venta->estado_venta;
             $nuevoEstado = $request->estado;
 
-            // Validar transiciones de estado
             if (!$this->validarTransicionEstado($estadoAnterior, $nuevoEstado)) {
                 return $this->errorResponse("No se puede cambiar de '{$estadoAnterior}' a '{$nuevoEstado}'", 400);
             }
 
-            // Si se confirma el pedido, verificar y descontar stock
             if ($estadoAnterior === 'Pendiente' && $nuevoEstado === 'Confirmado') {
                 foreach ($venta->detalles as $detalle) {
                     $producto = $detalle->producto;
@@ -202,7 +185,6 @@ class VentaController extends BaseController
                 }
             }
 
-            // Si se cancela un pedido confirmado, devolver stock
             if (in_array($estadoAnterior, ['Confirmado', 'En Proceso']) && $nuevoEstado === 'Cancelado') {
                 foreach ($venta->detalles as $detalle) {
                     $producto = $detalle->producto;
@@ -211,10 +193,8 @@ class VentaController extends BaseController
                 }
             }
 
-            // Actualizar estado
             $venta->estado_venta = $nuevoEstado;
             
-            // Registrar cambio en observaciones
             $observacionesActuales = $venta->observaciones ?? '';
             $timestamp = now()->format('d/m/Y H:i');
             $nuevaObservacion = "\n[{$timestamp}] {$estadoAnterior} → {$nuevoEstado}";
@@ -248,7 +228,7 @@ class VentaController extends BaseController
     }
 
     /**
-     * ⭐ GUARDAR URL DE COMPROBANTE (CORREGIDO PARA CLOUDINARY)
+     * Subir comprobante de pago
      */
     public function subirComprobante(Request $request, $id)
     {
@@ -275,15 +255,9 @@ class VentaController extends BaseController
 
         $comprobanteUrl = $request->comprobante_pago;
         
-        Log::info('📸 Actualizando comprobante:', [
-            'venta_id' => $venta->venta_id,
-            'url_recibida' => $comprobanteUrl
-        ]);
-        
         if (!str_starts_with($comprobanteUrl, 'http://') && 
             !str_starts_with($comprobanteUrl, 'https://')) {
             $comprobanteUrl = 'https://' . $comprobanteUrl;
-            Log::info('⚠️ Se agregó https:// al comprobante');
         }
         
         if (!str_contains($comprobanteUrl, 'cloudinary.com')) {
@@ -301,12 +275,6 @@ class VentaController extends BaseController
         
         $venta->save();
 
-        Log::info('✅ Comprobante actualizado:', [
-            'venta_id' => $venta->venta_id,
-            'comprobante_guardado' => $venta->comprobante_pago,
-            'codigo_operacion' => $venta->codigo_operacion
-        ]);
-
         return response()->json([
             'success' => true,
             'message' => 'Comprobante guardado exitosamente',
@@ -319,7 +287,7 @@ class VentaController extends BaseController
     }
 
     /**
-     * CANCELAR PEDIDO (CLIENTE o ADMIN)
+     * Cancelar pedido
      */
     public function cancelar(Request $request, $id)
     {
@@ -376,7 +344,7 @@ class VentaController extends BaseController
     }
 
     /**
-     * ⭐ REGISTRAR VENTA DESDE WEB (CON CARRITO)
+     * Registrar venta desde WEB (con carrito)
      */
     public function store(Request $request)
     {
@@ -442,37 +410,31 @@ class VentaController extends BaseController
                     }
                 }
 
-                $venta = new Venta();
-                $venta->cliente_id = $cliente->cliente_id;
-                $venta->user_id = $user->id;
-                $venta->subtotal = $subtotal;
-                $venta->descuento = 0;
-                $venta->total_venta = $subtotal;
-                $venta->metodo_pago = $request->metodo_pago;
-                $venta->estado_venta = 'Pendiente';
-                $venta->canal_venta = 'Web';
-                $venta->direccion_envio = $request->direccion_envio;
-                $venta->telefono_contacto = $request->telefono_contacto;
-                $venta->observaciones = $request->observaciones;
-                $venta->comprobante_pago = $comprobanteUrl;
-                
-                if ($request->filled('codigo_operacion')) {
-                    $venta->codigo_operacion = $request->codigo_operacion;
-                }
-
-                $venta->save();
-
-                $venta->numero_venta = 'V-' . str_pad($venta->venta_id, 6, '0', STR_PAD_LEFT);
-                $venta->save();
+                $venta = Venta::create([
+                    'cliente_id' => $cliente->cliente_id,
+                    'user_id' => $user->id,
+                    'subtotal' => $subtotal,
+                    'descuento' => 0,
+                    'total_venta' => $subtotal,
+                    'metodo_pago' => $request->metodo_pago,
+                    'estado_venta' => 'Pendiente',
+                    'canal_venta' => 'Web',
+                    'direccion_envio' => $request->direccion_envio,
+                    'telefono_contacto' => $request->telefono_contacto,
+                    'observaciones' => $request->observaciones,
+                    'comprobante_pago' => $comprobanteUrl,
+                    'codigo_operacion' => $request->codigo_operacion,
+                    'fecha_venta' => now()
+                ]);
 
                 foreach ($carrito->detalles as $detalleCarrito) {
-                    $detalleVenta = new DetalleVenta();
-                    $detalleVenta->venta_id = $venta->venta_id;
-                    $detalleVenta->producto_id = $detalleCarrito->producto_id;
-                    $detalleVenta->cantidad = $detalleCarrito->cantidad;
-                    $detalleVenta->precio_unitario = $detalleCarrito->precio_unitario;
-                    $detalleVenta->subtotal = $detalleCarrito->cantidad * $detalleCarrito->precio_unitario;
-                    $detalleVenta->save();
+                    DetalleVenta::create([
+                        'venta_id' => $venta->venta_id,
+                        'producto_id' => $detalleCarrito->producto_id,
+                        'cantidad' => $detalleCarrito->cantidad,
+                        'precio_unitario' => $detalleCarrito->precio_unitario,
+                        'subtotal' => $detalleCarrito->cantidad * $detalleCarrito->precio_unitario
+                    ]);
                 }
 
                 $carrito->detalles()->delete();
@@ -504,6 +466,8 @@ class VentaController extends BaseController
         } catch (\Exception $e) {
             Log::error('❌ Error al crear venta WEB:', [
                 'mensaje' => $e->getMessage(),
+                'linea' => $e->getLine(),
+                'archivo' => $e->getFile(),
             ]);
             return response()->json([
                 'success' => false,
@@ -513,13 +477,13 @@ class VentaController extends BaseController
     }
 
     /**
-     * ⭐ CREAR VENTA DESDE POS (Punto de Venta)
+     * ⭐ CREAR VENTA DESDE POS (Punto de Venta) - CORREGIDO
      */
     public function crearVenta(Request $request)
     {
         try {
             Log::info('📦 === CREAR VENTA POS ===');
-            Log::info('📦 Datos recibidos:', $request->all());
+            Log::info('📦 Request completo:', $request->all());
             
             $validator = Validator::make($request->all(), [
                 'cliente_id' => 'required|exists:clientes,cliente_id',
@@ -545,6 +509,7 @@ class VentaController extends BaseController
             DB::beginTransaction();
 
             try {
+                // Calcular subtotal
                 $subtotal = 0;
                 foreach ($request->items as $item) {
                     $subtotal += $item['cantidad'] * $item['precio_unitario'];
@@ -553,24 +518,49 @@ class VentaController extends BaseController
                 $descuento = $request->descuento ?? 0;
                 $total = $subtotal - $descuento;
 
-                $venta = new Venta();
-                $venta->cliente_id = $request->cliente_id;
-                $venta->user_id = Auth::id();
-                $venta->subtotal = $subtotal;
-                $venta->descuento = $descuento;
-                $venta->total_venta = $total;
-                $venta->metodo_pago = $request->metodo_pago;
-                $venta->estado_venta = 'Completado';
-                $venta->canal_venta = $request->canal_venta ?? 'Tienda física';
-                $venta->observaciones = $request->observaciones;
-                $venta->fecha_venta = now();
-                $venta->save();
+                Log::info('💰 Cálculos:', [
+                    'subtotal' => $subtotal,
+                    'descuento' => $descuento,
+                    'total' => $total
+                ]);
 
-                $venta->numero_venta = 'V-' . str_pad($venta->venta_id, 6, '0', STR_PAD_LEFT);
-                $venta->save();
+                // Crear venta
+                $venta = Venta::create([
+                    'cliente_id' => $request->cliente_id,
+                    'user_id' => Auth::id(),
+                    'subtotal' => $subtotal,
+                    'descuento' => $descuento,
+                    'total_venta' => $total,
+                    'metodo_pago' => $request->metodo_pago,
+                    'estado_venta' => 'Completado',
+                    'canal_venta' => $request->canal_venta ?? 'Tienda física',
+                    'observaciones' => $request->observaciones,
+                    'fecha_venta' => now()
+                ]);
 
+                Log::info('✅ Venta creada:', [
+                    'venta_id' => $venta->venta_id,
+                    'numero_venta' => $venta->numero_venta
+                ]);
+
+                // Crear detalles y actualizar stock
                 foreach ($request->items as $item) {
                     $producto = Producto::find($item['producto_id']);
+
+                    if (!$producto) {
+                        DB::rollBack();
+                        Log::error('❌ Producto no encontrado:', ['producto_id' => $item['producto_id']]);
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Producto con ID {$item['producto_id']} no encontrado"
+                        ], 404);
+                    }
+
+                    Log::info('📦 Procesando producto:', [
+                        'nombre' => $producto->nombre_producto,
+                        'stock_actual' => $producto->stock_disponible,
+                        'cantidad_solicitada' => $item['cantidad']
+                    ]);
 
                     if ($producto->stock_disponible < $item['cantidad']) {
                         DB::rollBack();
@@ -580,28 +570,30 @@ class VentaController extends BaseController
                         ], 400);
                     }
 
-                    $detalleVenta = new DetalleVenta();
-                    $detalleVenta->venta_id = $venta->venta_id;
-                    $detalleVenta->producto_id = $item['producto_id'];
-                    $detalleVenta->cantidad = $item['cantidad'];
-                    $detalleVenta->precio_unitario = $item['precio_unitario'];
-                    $detalleVenta->subtotal = $item['cantidad'] * $item['precio_unitario'];
-                    $detalleVenta->save();
+                    // Crear detalle
+                    DetalleVenta::create([
+                        'venta_id' => $venta->venta_id,
+                        'producto_id' => $item['producto_id'],
+                        'cantidad' => $item['cantidad'],
+                        'precio_unitario' => $item['precio_unitario'],
+                        'subtotal' => $item['cantidad'] * $item['precio_unitario']
+                    ]);
 
+                    // Actualizar stock
                     $producto->stock_disponible -= $item['cantidad'];
                     $producto->save();
 
-                    Log::info("✅ Stock actualizado: {$producto->nombre_producto} - Nuevo stock: {$producto->stock_disponible}");
+                    Log::info("✅ Stock actualizado:", [
+                        'producto' => $producto->nombre_producto,
+                        'stock_nuevo' => $producto->stock_disponible
+                    ]);
                 }
 
                 DB::commit();
 
-                Log::info('✅ Venta POS creada exitosamente:', [
-                    'venta_id' => $venta->venta_id,
-                    'numero_venta' => $venta->numero_venta,
-                    'total' => $venta->total_venta,
-                ]);
+                Log::info('✅ Venta POS procesada exitosamente');
 
+                // Cargar relaciones
                 $venta->load(['cliente', 'detalles.producto']);
 
                 return response()->json([
@@ -615,13 +607,17 @@ class VentaController extends BaseController
                 Log::error('❌ Error en transacción:', [
                     'mensaje' => $e->getMessage(),
                     'linea' => $e->getLine(),
+                    'archivo' => $e->getFile(),
+                    'trace' => $e->getTraceAsString()
                 ]);
                 throw $e;
             }
 
         } catch (\Exception $e) {
-            Log::error('❌ Error al crear venta POS:', [
+            Log::error('❌ Error general al crear venta POS:', [
                 'mensaje' => $e->getMessage(),
+                'linea' => $e->getLine(),
+                'archivo' => $e->getFile(),
             ]);
             
             return response()->json([
@@ -654,7 +650,7 @@ class VentaController extends BaseController
     }
 
     /**
-     * ⭐ MAPEAR VENTA - VERSIÓN COMPLETA
+     * Mapear venta
      */
     private function mapearVenta($venta)
     {
@@ -680,7 +676,7 @@ class VentaController extends BaseController
             ],
             'fecha_venta' => $venta->fecha_venta,
             'estado_venta' => $venta->estado_venta,
-            'subtotal' => (float) ($venta->subtotal ?? $venta->total_venta),
+            'subtotal' => (float) ($venta->subtotal ?? 0),
             'descuento' => (float) ($venta->descuento ?? 0),
             'total' => (float) $venta->total_venta,
             'total_venta' => (float) $venta->total_venta,
