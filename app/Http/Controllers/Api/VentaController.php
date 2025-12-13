@@ -387,9 +387,10 @@ class VentaController extends BaseController
             DB::beginTransaction();
 
             try {
-                $subtotal = 0;
+                // Calcular total
+                $total = 0;
                 foreach ($carrito->detalles as $detalle) {
-                    $subtotal += $detalle->cantidad * $detalle->precio_unitario;
+                    $total += $detalle->cantidad * $detalle->precio_unitario;
                 }
 
                 $comprobanteUrl = null;
@@ -410,12 +411,10 @@ class VentaController extends BaseController
                     }
                 }
 
+                // ✅ SOLO columnas que existen en la tabla
                 $venta = Venta::create([
                     'cliente_id' => $cliente->cliente_id,
-                    'user_id' => $user->id,
-                    'subtotal' => $subtotal,
-                    'descuento' => 0,
-                    'total_venta' => $subtotal,
+                    'total_venta' => $total,
                     'metodo_pago' => $request->metodo_pago,
                     'estado_venta' => 'Pendiente',
                     'canal_venta' => 'Web',
@@ -477,7 +476,7 @@ class VentaController extends BaseController
     }
 
     /**
-     * ⭐ CREAR VENTA DESDE POS (Punto de Venta) - CORREGIDO
+     * ⭐ CREAR VENTA DESDE POS (Punto de Venta)
      */
     public function crearVenta(Request $request)
     {
@@ -494,7 +493,6 @@ class VentaController extends BaseController
                 'metodo_pago' => 'required|string',
                 'canal_venta' => 'nullable|string',
                 'observaciones' => 'nullable|string',
-                'descuento' => 'nullable|numeric|min:0',
             ]);
 
             if ($validator->fails()) {
@@ -509,27 +507,17 @@ class VentaController extends BaseController
             DB::beginTransaction();
 
             try {
-                // Calcular subtotal
-                $subtotal = 0;
+                // ✅ Calcular SOLO el total
+                $total = 0;
                 foreach ($request->items as $item) {
-                    $subtotal += $item['cantidad'] * $item['precio_unitario'];
+                    $total += $item['cantidad'] * $item['precio_unitario'];
                 }
 
-                $descuento = $request->descuento ?? 0;
-                $total = $subtotal - $descuento;
+                Log::info('💰 Total calculado:', ['total' => $total]);
 
-                Log::info('💰 Cálculos:', [
-                    'subtotal' => $subtotal,
-                    'descuento' => $descuento,
-                    'total' => $total
-                ]);
-
-                // Crear venta
+                // ✅ Crear venta - SOLO con columnas que existen
                 $venta = Venta::create([
                     'cliente_id' => $request->cliente_id,
-                    'user_id' => Auth::id(),
-                    'subtotal' => $subtotal,
-                    'descuento' => $descuento,
                     'total_venta' => $total,
                     'metodo_pago' => $request->metodo_pago,
                     'estado_venta' => 'Completado',
@@ -661,6 +649,9 @@ class VentaController extends BaseController
             $venta->load('detalles.producto');
         }
 
+        // ✅ Calcular subtotal desde los detalles
+        $subtotal = $venta->detalles->sum('subtotal');
+
         return [
             'venta_id' => $venta->venta_id,
             'numero_venta' => $venta->numero_venta,
@@ -676,8 +667,8 @@ class VentaController extends BaseController
             ],
             'fecha_venta' => $venta->fecha_venta,
             'estado_venta' => $venta->estado_venta,
-            'subtotal' => (float) ($venta->subtotal ?? 0),
-            'descuento' => (float) ($venta->descuento ?? 0),
+            'subtotal' => (float) $subtotal,
+            'descuento' => 0,  // ✅ Siempre 0
             'total' => (float) $venta->total_venta,
             'total_venta' => (float) $venta->total_venta,
             'metodo_pago' => $venta->metodo_pago ?? 'No especificado',

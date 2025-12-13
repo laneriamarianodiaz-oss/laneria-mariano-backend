@@ -15,11 +15,8 @@ class Venta extends Model
 
     protected $fillable = [
         'cliente_id',
-        'user_id',
         'fecha_venta', 
         'estado_venta',
-        'subtotal',
-        'descuento',
         'total_venta',
         'metodo_pago',
         'canal_venta',
@@ -33,8 +30,6 @@ class Venta extends Model
     protected $casts = [
         'fecha_venta' => 'datetime',
         'total_venta' => 'decimal:2',
-        'subtotal' => 'decimal:2',
-        'descuento' => 'decimal:2',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -55,14 +50,6 @@ class Venta extends Model
     public function cliente()
     {
         return $this->belongsTo(Cliente::class, 'cliente_id', 'cliente_id');
-    }
-
-    /**
-     * Relación: Una venta pertenece a un usuario
-     */
-    public function user()
-    {
-        return $this->belongsTo(User::class, 'user_id', 'id');
     }
 
     /**
