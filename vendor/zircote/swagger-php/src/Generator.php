@@ -75,9 +75,15 @@ class Generator
         $this->setNamespaces(self::DEFAULT_NAMESPACES);
     }
 
-    public static function isDefault($value): bool
+    public static function isDefault(...$value): bool
     {
-        return $value === Generator::UNDEFINED;
+        foreach ($value as $v) {
+            if ($v !== Generator::UNDEFINED) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -231,8 +237,10 @@ class Generator
                 new Processors\BuildPaths(),
                 new Processors\AugmentParameters(),
                 new Processors\AugmentRefs(),
+                new Processors\AugmentItems(),
                 new Processors\MergeJsonContent(),
                 new Processors\MergeXmlContent(),
+                new Processors\AugmentMediaType(),
                 new Processors\OperationId(),
                 new Processors\CleanUnmerged(),
                 new Processors\PathFilter(),
