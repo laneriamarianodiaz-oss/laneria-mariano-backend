@@ -478,143 +478,137 @@ class VentaController extends BaseController
     /**
      * ⭐ CREAR VENTA DESDE POS (Punto de Venta)
      */
-    public function crearVenta(Request $request)
-    {
+   /**
+ * ⭐ CREAR VENTA DESDE POS (Punto de Venta)
+ */
+public function crearVenta(Request $request)
+{
+    try {
+        Log::info('📦 === CREAR VENTA POS ===');
+        Log::info('📦 Request completo:', $request->all());
+        
+        $validator = Validator::make($request->all(), [
+            'cliente_id' => 'required|exists:clientes,cliente_id',
+            'items' => 'required|array|min:1',
+            'items.*.producto_id' => 'required|exists:productos,producto_id',
+            'items.*.cantidad' => 'required|integer|min:1',
+            'items.*.precio_unitario' => 'required|numeric|min:0',
+            'metodo_pago' => 'required|string',
+            'canal_venta' => 'nullable|string',
+            'observaciones' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            Log::error('❌ Validación fallida:', $validator->errors()->toArray());
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors(),
+                'message' => 'Errores de validación'
+            ], 422);
+        }
+
+        DB::beginTransaction();
+
         try {
-            Log::info('📦 === CREAR VENTA POS ===');
-            Log::info('📦 Request completo:', $request->all());
-            
-            $validator = Validator::make($request->all(), [
-                'cliente_id' => 'required|exists:clientes,cliente_id',
-                'items' => 'required|array|min:1',
-                'items.*.producto_id' => 'required|exists:productos,producto_id',
-                'items.*.cantidad' => 'required|integer|min:1',
-                'items.*.precio_unitario' => 'required|numeric|min:0',
-                'metodo_pago' => 'required|string',
-                'canal_venta' => 'nullable|string',
-                'observaciones' => 'nullable|string',
+            // Calcular total
+            $total = 0;
+            foreach ($request->items as $item) {
+                $total += $item['cantidad'] * $item['precio_unitario'];
+            }
+
+            Log::info('💰 Total calculado:', ['total' => $total]);
+
+            // ✅ CREAR VENTA MANUALMENTE (sin mass assignment)
+            $venta = new Venta();
+            $venta->cliente_id = $request->cliente_id;
+            $venta->total_venta = $total;
+            $venta->metodo_pago = $request->metodo_pago;
+            $venta->estado_venta = 'Completado';
+            $venta->canal_venta = $request->canal_venta ?? 'Tienda física';
+            $venta->observaciones = $request->observaciones;
+            $venta->fecha_venta = now();
+            $venta->save();
+
+            Log::info('✅ Venta creada:', [
+                'venta_id' => $venta->venta_id,
             ]);
 
-            if ($validator->fails()) {
-                Log::error('❌ Validación fallida:', $validator->errors()->toArray());
-                return response()->json([
-                    'success' => false,
-                    'errors' => $validator->errors(),
-                    'message' => 'Errores de validación'
-                ], 422);
-            }
+            // Crear detalles y actualizar stock
+            foreach ($request->items as $item) {
+                $producto = Producto::find($item['producto_id']);
 
-            DB::beginTransaction();
-
-            try {
-                // ✅ Calcular SOLO el total
-                $total = 0;
-                foreach ($request->items as $item) {
-                    $total += $item['cantidad'] * $item['precio_unitario'];
+                if (!$producto) {
+                    DB::rollBack();
+                    Log::error('❌ Producto no encontrado:', ['producto_id' => $item['producto_id']]);
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Producto con ID {$item['producto_id']} no encontrado"
+                    ], 404);
                 }
 
-                Log::info('💰 Total calculado:', ['total' => $total]);
-
-                // ✅ Crear venta - SOLO con columnas que existen
-                $venta = Venta::create([
-                    'cliente_id' => $request->cliente_id,
-                    'total_venta' => $total,
-                    'metodo_pago' => $request->metodo_pago,
-                    'estado_venta' => 'Completado',
-                    'canal_venta' => $request->canal_venta ?? 'Tienda física',
-                    'observaciones' => $request->observaciones,
-                    'fecha_venta' => now()
-                ]);
-
-                Log::info('✅ Venta creada:', [
-                    'venta_id' => $venta->venta_id,
-                    'numero_venta' => $venta->numero_venta
-                ]);
-
-                // Crear detalles y actualizar stock
-                foreach ($request->items as $item) {
-                    $producto = Producto::find($item['producto_id']);
-
-                    if (!$producto) {
-                        DB::rollBack();
-                        Log::error('❌ Producto no encontrado:', ['producto_id' => $item['producto_id']]);
-                        return response()->json([
-                            'success' => false,
-                            'message' => "Producto con ID {$item['producto_id']} no encontrado"
-                        ], 404);
-                    }
-
-                    Log::info('📦 Procesando producto:', [
-                        'nombre' => $producto->nombre_producto,
-                        'stock_actual' => $producto->stock_disponible,
-                        'cantidad_solicitada' => $item['cantidad']
-                    ]);
-
-                    if ($producto->stock_disponible < $item['cantidad']) {
-                        DB::rollBack();
-                        return response()->json([
-                            'success' => false,
-                            'message' => "Stock insuficiente para {$producto->nombre_producto}. Disponible: {$producto->stock_disponible}"
-                        ], 400);
-                    }
-
-                    // Crear detalle
-                    DetalleVenta::create([
-                        'venta_id' => $venta->venta_id,
-                        'producto_id' => $item['producto_id'],
-                        'cantidad' => $item['cantidad'],
-                        'precio_unitario' => $item['precio_unitario'],
-                        'subtotal' => $item['cantidad'] * $item['precio_unitario']
-                    ]);
-
-                    // Actualizar stock
-                    $producto->stock_disponible -= $item['cantidad'];
-                    $producto->save();
-
-                    Log::info("✅ Stock actualizado:", [
-                        'producto' => $producto->nombre_producto,
-                        'stock_nuevo' => $producto->stock_disponible
-                    ]);
+                if ($producto->stock_disponible < $item['cantidad']) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Stock insuficiente para {$producto->nombre_producto}. Disponible: {$producto->stock_disponible}"
+                    ], 400);
                 }
 
-                DB::commit();
+                // Crear detalle
+                $detalle = new DetalleVenta();
+                $detalle->venta_id = $venta->venta_id;
+                $detalle->producto_id = $item['producto_id'];
+                $detalle->cantidad = $item['cantidad'];
+                $detalle->precio_unitario = $item['precio_unitario'];
+                $detalle->subtotal = $item['cantidad'] * $item['precio_unitario'];
+                $detalle->save();
 
-                Log::info('✅ Venta POS procesada exitosamente');
+                // Actualizar stock
+                $producto->stock_disponible -= $item['cantidad'];
+                $producto->save();
 
-                // Cargar relaciones
-                $venta->load(['cliente', 'detalles.producto']);
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Venta creada exitosamente',
-                    'data' => $this->mapearVenta($venta)
-                ], 201);
-
-            } catch (\Exception $e) {
-                DB::rollBack();
-                Log::error('❌ Error en transacción:', [
-                    'mensaje' => $e->getMessage(),
-                    'linea' => $e->getLine(),
-                    'archivo' => $e->getFile(),
-                    'trace' => $e->getTraceAsString()
+                Log::info("✅ Stock actualizado:", [
+                    'producto' => $producto->nombre_producto,
+                    'stock_nuevo' => $producto->stock_disponible
                 ]);
-                throw $e;
             }
+
+            DB::commit();
+
+            Log::info('✅ Venta POS procesada exitosamente');
+
+            // Cargar relaciones
+            $venta->load(['cliente', 'detalles.producto']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Venta creada exitosamente',
+                'data' => $this->mapearVenta($venta)
+            ], 201);
 
         } catch (\Exception $e) {
-            Log::error('❌ Error general al crear venta POS:', [
+            DB::rollBack();
+            Log::error('❌ Error en transacción:', [
                 'mensaje' => $e->getMessage(),
                 'linea' => $e->getLine(),
                 'archivo' => $e->getFile(),
             ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al crear la venta: ' . $e->getMessage()
-            ], 500);
+            throw $e;
         }
-    }
 
+    } catch (\Exception $e) {
+        Log::error('❌ Error general al crear venta POS:', [
+            'mensaje' => $e->getMessage(),
+            'linea' => $e->getLine(),
+            'archivo' => $e->getFile(),
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al crear la venta: ' . $e->getMessage()
+        ], 500);
+    }
+}
     /**
      * Validar transiciones de estado
      */
