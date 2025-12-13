@@ -63,21 +63,11 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     Route::post('/carrito/checkout', [CarritoController::class, 'crearVentaDesdeCarrito']);
     
     // ===================================
-    // 💰 VENTAS Y COMPROBANTES
-    // ===================================
-    Route::post('/ventas', [VentaController::class, 'store']);
-    Route::post('/ventas/crear', [VentaController::class, 'crearVenta']);
-    Route::get('/ventas', [VentaController::class, 'index']);
-    Route::get('/ventas/{id}', [VentaController::class, 'show']);
-    Route::put('/ventas/{id}/estado', [VentaController::class, 'actualizarEstado']);
-    Route::get('/mis-ventas', [VentaController::class, 'misVentas']);
-    Route::post('/ventas/{id}/comprobante', [VentaController::class, 'subirComprobante']);
-    
-    // ===================================
     // 📊 ESTADÍSTICAS Y DASHBOARD (Admin y Vendedor)
+    // ⚠️ IMPORTANTE: ESTAS RUTAS DEBEN IR **ANTES** DE LAS RUTAS DE VENTAS
     // ===================================
     Route::middleware(['role:administrador,vendedor'])->group(function () {
-        // Estadísticas principales
+        // ⭐ RUTAS ESPECÍFICAS DE ESTADÍSTICAS (ANTES DE /ventas/{id})
         Route::get('/ventas/estadisticas', [EstadisticasController::class, 'ventas']);
         Route::get('/ventas/semana', [EstadisticasController::class, 'ventasSemana']);
         Route::get('/ventas/recientes', [EstadisticasController::class, 'ventasRecientes']);
@@ -94,6 +84,18 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
         Route::get('/admin/pedidos', [VentaController::class, 'listarPedidos']);
         Route::put('/admin/pedidos/{id}/estado', [VentaController::class, 'actualizarEstado']);
     });
+    
+    // ===================================
+    // 💰 VENTAS Y COMPROBANTES
+    // ⚠️ ESTAS RUTAS VAN **DESPUÉS** DE LAS ESTADÍSTICAS
+    // ===================================
+    Route::post('/ventas', [VentaController::class, 'store']);
+    Route::post('/ventas/crear', [VentaController::class, 'crearVenta']);
+    Route::get('/ventas', [VentaController::class, 'index']);
+    Route::get('/ventas/{id}', [VentaController::class, 'show']); // ⚠️ Esta ruta dinámica va al final
+    Route::put('/ventas/{id}/estado', [VentaController::class, 'actualizarEstado']);
+    Route::get('/mis-ventas', [VentaController::class, 'misVentas']);
+    Route::post('/ventas/{id}/comprobante', [VentaController::class, 'subirComprobante']);
     
     // ===================================
     // 📦 PRODUCTOS (Admin y Vendedor)
