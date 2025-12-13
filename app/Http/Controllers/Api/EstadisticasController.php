@@ -180,9 +180,18 @@ class EstadisticasController extends Controller
     {
         try {
             $limite = $request->get('limite', 5);
-            $diasAtras = $request->get('dias', 30); // Por defecto últimos 30 días
+            $diasAtras = $request->get('dias', 30);
             
             $fechaInicio = Carbon::now()->subDays($diasAtras);
+
+            // Verificar si hay ventas primero
+            $hayVentas = Venta::where('fecha_venta', '>=', $fechaInicio)
+                ->where('estado_venta', 'Completado')
+                ->exists();
+
+            if (!$hayVentas) {
+                return response()->json([], 200);
+            }
 
             $topProductos = DB::table('detalle_venta')
                 ->join('productos', 'detalle_venta.producto_id', '=', 'productos.producto_id')
@@ -192,7 +201,7 @@ class EstadisticasController extends Controller
                 ->select(
                     'productos.producto_id as id',
                     'productos.nombre_producto as nombre',
-                    DB::raw('SUM(detalle_venta.cantidad) as cantidadVendida')
+                    DB::raw('CAST(SUM(detalle_venta.cantidad) as UNSIGNED) as cantidadVendida')
                 )
                 ->groupBy('productos.producto_id', 'productos.nombre_producto')
                 ->orderBy('cantidadVendida', 'desc')
@@ -203,13 +212,13 @@ class EstadisticasController extends Controller
 
         } catch (\Exception $e) {
             Log::error('❌ Error en top productos:', [
-                'mensaje' => $e->getMessage()
+                'mensaje' => $e->getMessage(),
+                'linea' => $e->getLine(),
+                'archivo' => $e->getFile()
             ]);
             
-            return response()->json([
-                'error' => 'Error al obtener top productos',
-                'message' => $e->getMessage()
-            ], 500);
+            // Devolver array vacío en vez de error 500
+            return response()->json([], 200);
         }
     }
 
