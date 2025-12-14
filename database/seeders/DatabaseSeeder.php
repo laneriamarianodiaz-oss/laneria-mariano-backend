@@ -32,16 +32,16 @@ class DatabaseSeeder extends Seeder
 
         // Crear proveedores
         $proveedor1 = Proveedor::create([
-            'nombre' => 'Textiles Andinos SAC',
-            'contacto' => 'Juan Pérez',
+            'nombre_proveedor' => 'Textiles Andinos SAC',
+            'contacto_proveedor' => 'Juan Pérez',
             'telefono' => '987654321',
             'email' => 'contacto@textilesandinos.com',
             'direccion' => 'Av. Principal 123, Andahuaylas',
         ]);
 
         $proveedor2 = Proveedor::create([
-            'nombre' => 'Lanas del Sur EIRL',
-            'contacto' => 'María González',
+            'nombre_proveedor' => 'Lanas del Sur EIRL',
+            'contacto_proveedor' => 'María González',
             'telefono' => '912345678',
             'email' => 'ventas@lanasdelsur.com',
             'direccion' => 'Jr. Comercio 456, Cusco',

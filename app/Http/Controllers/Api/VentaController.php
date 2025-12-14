@@ -554,6 +554,7 @@ public function crearVenta(Request $request)
                     ], 400);
                 }
 
+                
                 // Crear detalle
                 $detalle = new DetalleVenta();
                 $detalle->venta_id = $venta->venta_id;
