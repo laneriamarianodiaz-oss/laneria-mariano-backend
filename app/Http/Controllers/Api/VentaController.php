@@ -573,6 +573,7 @@ public function crearVenta(Request $request)
                 ]);
             }
 
+            
             DB::commit();
 
             Log::info('✅ Venta POS procesada exitosamente');
