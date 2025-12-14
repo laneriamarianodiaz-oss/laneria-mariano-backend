@@ -15,6 +15,7 @@ class Venta extends Model
     // ✅ CORREGIDO: Desactivar timestamps automáticos
     public $timestamps = false;
 
+    
     protected $fillable = [
         'cliente_id',
         'fecha_venta', 
