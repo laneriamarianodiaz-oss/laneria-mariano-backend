@@ -12,7 +12,16 @@ return new class extends Migration
             $table->id('venta_id');
             $table->unsignedBigInteger('cliente_id');
             $table->timestamp('fecha_venta')->useCurrent();
-            $table->enum('estado_venta', ['Pendiente', 'Completada', 'Cancelada'])->default('Pendiente');
+            // ✅ ENUM ACTUALIZADO
+            $table->enum('estado_venta', [
+                'Pendiente',
+                'Confirmado',
+                'En Proceso',
+                'Enviado',
+                'Entregado',
+                'Completado',
+                'Cancelado'
+            ])->default('Pendiente');
             $table->decimal('total_venta', 10, 2);
             $table->enum('metodo_pago', ['Efectivo', 'Transferencia', 'Yape', 'Plin']);
             $table->text('observaciones')->nullable();
