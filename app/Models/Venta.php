@@ -11,7 +11,9 @@ class Venta extends Model
 
     protected $table = 'ventas';
     protected $primaryKey = 'venta_id';
-    public $timestamps = true;
+    
+    // ✅ CORREGIDO: Desactivar timestamps automáticos
+    public $timestamps = false;
 
     protected $fillable = [
         'cliente_id',
@@ -30,8 +32,6 @@ class Venta extends Model
     protected $casts = [
         'fecha_venta' => 'datetime',
         'total_venta' => 'decimal:2',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
     ];
 
     protected $appends = ['numero_venta'];
